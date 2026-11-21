@@ -143,6 +143,14 @@ def change_balance(uid, amount):
 def get_lang(uid):
     return get_user(uid)["lang"] or "kz"
 
+
+async def get_referral_data(uid):
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM users WHERE referrer_id=%s", (uid,))
+        count = cur.fetchone()[0]
+    me = await bot.get_me()
+    return count, f"https://t.me/{me.username}?start=ref_{uid}"
+
 def money(value):
     return Decimal(str(value)).quantize(Decimal("0.01"))
 
@@ -150,7 +158,7 @@ def money(value):
 TEXT = {
  "kz": {
   "welcome":"Сәлем! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Балансыңыз: <b>${:.2f}</b>\n\nНе істейміз?",
-  "play":"Ойын ойнау","profile":"Профиль","balance":"Баланс","deposit":"Пополнить","withdraw":"Вывод","lang":"Тіл",
+  "play":"Ойын ойнау","profile":"Профиль","balance":"Баланс","rating":"Рейтинг","referrals":"Реферал","deposit":"Пополнить","withdraw":"Вывод","lang":"Тіл",
   "choose":e("play","🎮") + " Ойынды таңдаңыз:","dice":"🎲 Кости дуэль","darts":"🎯 Дартс дуэль","bet":"Ставканы енгізіңіз (USD):",
   "no_money":"❌ Балансыңыз жеткіліксіз!","deposit_amount":e("wallet","💵") + " Толықтырғыңыз келетін соманы USD түрінде енгізіңіз:",
   "pay":"💳 Төлеу","created":e("crypto","💳") + " Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
@@ -158,14 +166,17 @@ TEXT = {
   "withdraw_amount":e("crypto","💳") + " Шығарылатын соманы енгізіңіз (ең азы $1):",
   "withdraw_address":e("usdt","💵") + " USDT TRC20 әмиян мекенжайын енгізіңіз:",
   "withdraw_sent":"Өтінім қабылданды. Әкімші тексергеннен кейін өңдейді.",
-  "profile_text":e("profile","👤") + " <b>Профиль</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Жеңістер: {}\n" + e("lose","❌") + " Жеңілістер: {}\n" + e("games","🎮") + " Ойындар: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Аноним: {}",
+  "profile_text":e("profile","👤") + " <b>Профиль</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Жеңістер: {}\n" + e("lose","❌") + " Жеңілістер: {}\n" + e("games","🎮") + " Ойындар: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Аноним: {}\n" + e("info","👥") + " Рефералдар: {}",
   "balance_text":e("balance","💰") + " Баланс: ${:.2f}",
+  "rating_text":e("games","🏅") + " <b>Рейтинг ойыншылар</b>",
+  "referral_text":e("info","👥") + " <b>Реферал жүйесі</b>\n\nДосыңды шақыр. Тіркелген реферал саны: <b>{}</b>\n\nСенің сілтемең:\n<code>{}</code>",
+  "referral_link_text":e("info","🔗") + " Шақыру сілтемесі: <code>{}</code>",
   "language":e("info","❗") + " Тілді таңдаңыз:",
   "back":"⬅️ Артқа","bad_amount":"❌ Соманы дұрыс енгізіңіз.","admin_only":"Бұл команда тек әкімшіге арналған.",
  },
  "ru": {
   "welcome":"Привет! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Баланс: <b>${:.2f}</b>\n\nЧто делаем?",
-  "play":"Играть","profile":"Профиль","balance":"Баланс","deposit":"Пополнить","withdraw":"Вывод","lang":"Язык",
+  "play":"Играть","profile":"Профиль","balance":"Баланс","rating":"Рейтинг","referrals":"Рефералы","deposit":"Пополнить","withdraw":"Вывод","lang":"Язык",
   "choose":e("play","🎮") + " Выберите игру:","dice":"🎲 Дуэль на костях","darts":"🎯 Дуэль в дартс","bet":"Введите ставку (USD):",
   "no_money":"❌ Недостаточно средств!","deposit_amount":e("wallet","💵") + " Введите сумму пополнения в USD:",
   "pay":"💳 Оплатить","created":e("crypto","💳") + " Счёт создан на ${}. Нажмите кнопку оплаты.",
@@ -173,14 +184,17 @@ TEXT = {
   "withdraw_amount":e("crypto","💳") + " Введите сумму вывода (минимум $1):",
   "withdraw_address":e("usdt","💵") + " Введите адрес USDT TRC20:",
   "withdraw_sent":"Заявка принята и будет обработана администратором.",
-  "profile_text":e("profile","👤") + " <b>Профиль</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Победы: {}\n" + e("lose","❌") + " Поражения: {}\n" + e("games","🎮") + " Игры: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Аноним: {}",
+  "profile_text":e("profile","👤") + " <b>Профиль</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Победы: {}\n" + e("lose","❌") + " Поражения: {}\n" + e("games","🎮") + " Игры: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Аноним: {}\n" + e("info","👥") + " Рефералы: {}",
   "balance_text":e("balance","💰") + " Баланс: ${:.2f}",
+  "rating_text":e("games","🏅") + " <b>Рейтинг игроков</b>",
+  "referral_text":e("info","👥") + " <b>Реферальная система</b>\n\nПриглашай друзей. Зарегистрировано рефералов: <b>{}</b>\n\nТвоя ссылка:\n<code>{}</code>",
+  "referral_link_text":e("info","🔗") + " Шақыру сілтемесі: <code>{}</code>",
   "language":e("info","❗") + " Выберите язык:",
   "back":"⬅️ Назад","bad_amount":"❌ Введите корректную сумму.","admin_only":"Только для администратора.",
  },
  "en": {
   "welcome":"Hi! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Balance: <b>${:.2f}</b>\n\nWhat do we do?",
-  "play":"Play","profile":"Profile","balance":"Balance","deposit":"Deposit","withdraw":"Withdraw","lang":"Language",
+  "play":"Play","profile":"Profile","balance":"Balance","rating":"Rating","referrals":"Referrals","deposit":"Deposit","withdraw":"Withdraw","lang":"Language",
   "choose":e("play","🎮") + " Choose a game:","dice":"🎲 Dice duel","darts":"🎯 Darts duel","bet":"Enter bet (USD):",
   "no_money":"❌ Insufficient balance!","deposit_amount":e("wallet","💵") + " Enter deposit amount in USD:",
   "pay":"💳 Pay","created":e("crypto","💳") + " Invoice created for ${}. Tap to pay.",
@@ -188,8 +202,11 @@ TEXT = {
   "withdraw_amount":e("crypto","💳") + " Enter withdrawal amount (minimum $1):",
   "withdraw_address":e("usdt","💵") + " Enter your USDT TRC20 wallet address:",
   "withdraw_sent":"Request received. An administrator will process it.",
-  "profile_text":e("profile","👤") + " <b>Profile</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Wins: {}\n" + e("lose","❌") + " Losses: {}\n" + e("games","🎮") + " Games: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Anonymous: {}",
+  "profile_text":e("profile","👤") + " <b>Profile</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Wins: {}\n" + e("lose","❌") + " Losses: {}\n" + e("games","🎮") + " Games: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Anonymous: {}\n" + e("info","👥") + " Referrals: {}",
   "balance_text":e("balance","💰") + " Balance: ${:.2f}",
+  "rating_text":e("games","🏅") + " <b>Player leaderboard</b>",
+  "referral_text":e("info","👥") + " <b>Referral system</b>\n\nInvite friends. Registered referrals: <b>{}</b>\n\nYour link:\n<code>{}</code>",
+  "referral_link_text":e("info","🔗") + " Invite link: <code>{}</code>",
   "language":e("info","❗") + " Choose language:",
   "back":"⬅️ Back","bad_amount":"❌ Enter a valid amount.","admin_only":"Admin only.",
  }
@@ -204,15 +221,29 @@ class AmountState(StatesGroup):
 def main_kb(lang):
     t = TEXT[lang]
     kb = InlineKeyboardBuilder()
-    for label, data in [(t["play"],"play"),(t["profile"],"profile"),(t["balance"],"balance"),
-                        (t["deposit"],"deposit"),(t["withdraw"],"withdraw"),(t["lang"],"language")]:
-        kb.button(text=label, callback_data=data)
-    kb.adjust(2,2,2)
+    kb.button(text=t["play"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["play"])
+    kb.button(text=t["profile"], callback_data="profile", icon_custom_emoji_id=EMOJI_IDS["profile"])
+    kb.button(text=t["balance"], callback_data="balance", icon_custom_emoji_id=EMOJI_IDS["balance"])
+    kb.button(text=t["rating"], callback_data="rating", icon_custom_emoji_id=EMOJI_IDS["games"])
+    kb.button(text=t["deposit"], callback_data="deposit", icon_custom_emoji_id=EMOJI_IDS["wallet"])
+    kb.button(text=t["withdraw"], callback_data="withdraw", icon_custom_emoji_id=EMOJI_IDS["wallet"])
+    kb.button(text=t["lang"], callback_data="language", icon_custom_emoji_id=EMOJI_IDS["info"])
+    kb.adjust(4, 2, 1)
     return kb.as_markup()
 
 def back_kb(lang, data="home"):
     kb=InlineKeyboardBuilder()
-    kb.button(text=TEXT[lang]["back"], callback_data=data)
+    kb.button(text=TEXT[lang]["back"], callback_data=data, icon_custom_emoji_id=EMOJI_IDS["back"])
+    return kb.as_markup()
+
+
+def profile_kb(lang):
+    kb = InlineKeyboardBuilder()
+    kb.button(text=TEXT[lang]["referrals"], callback_data="referrals",
+              icon_custom_emoji_id=EMOJI_IDS["info"])
+    kb.button(text=TEXT[lang]["back"], callback_data="home",
+              icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.adjust(1)
     return kb.as_markup()
 
 async def show_home(target, uid):
@@ -226,12 +257,16 @@ async def start(message: Message):
     args=message.text.split()
     if len(args)>1 and args[1].startswith("ref_"):
         try:
-            ref=int(args[1][4:])
+            ref = int(args[1][4:])
             if ref != message.from_user.id:
                 with db() as conn, conn.cursor() as cur:
-                    cur.execute("UPDATE users SET referrer_id=%s WHERE user_id=%s AND referrer_id IS NULL",
-                                (ref,message.from_user.id))
-        except ValueError:
+                    cur.execute(
+                        "UPDATE users AS u SET referrer_id=%s "
+                        "WHERE u.user_id=%s AND u.referrer_id IS NULL "
+                        "AND EXISTS (SELECT 1 FROM users WHERE user_id=%s)",
+                        (ref, message.from_user.id, ref)
+                    )
+        except (ValueError, TypeError):
             pass
     await message.answer(TEXT[u["lang"]]["welcome"].format(float(u["balance"])),
                          reply_markup=main_kb(u["lang"]), parse_mode="HTML")
@@ -247,9 +282,9 @@ async def home(c: CallbackQuery):
 async def play(c: CallbackQuery):
     t=TEXT[get_lang(c.from_user.id)]
     kb=InlineKeyboardBuilder()
-    kb.button(text=t["dice"],callback_data="game_dice")
-    kb.button(text=t["darts"],callback_data="game_darts")
-    kb.button(text=t["back"],callback_data="home")
+    kb.button(text=t["dice"], callback_data="game_dice", icon_custom_emoji_id=EMOJI_IDS["dice"])
+    kb.button(text=t["darts"], callback_data="game_darts", icon_custom_emoji_id=EMOJI_IDS["darts"])
+    kb.button(text=t["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
     kb.adjust(1)
     await c.message.edit_text(t["choose"],reply_markup=kb.as_markup(),parse_mode="HTML")
     await c.answer()
@@ -338,10 +373,61 @@ async def run_duel(lobby_id,players,game,bet,chat_id):
 
 @dp.callback_query(F.data=="profile")
 async def profile(c: CallbackQuery):
-    u=get_user(c.from_user.id); t=TEXT[u["lang"]]
-    await c.message.edit_text(t["profile_text"].format(u["user_id"],u["wins"],u["losses"],u["games"],
-        "✅" if u["is_vip"] else "❌","✅" if u["is_anonymous"] else "❌"),
-        reply_markup=back_kb(u["lang"]),parse_mode="HTML")
+    u = get_user(c.from_user.id)
+    lang = u["lang"]
+    t = TEXT[lang]
+    referral_count, referral_link = await get_referral_data(c.from_user.id)
+    profile_text = t["profile_text"].format(
+        u["user_id"], u["wins"], u["losses"], u["games"],
+        "✅" if u["is_vip"] else "❌",
+        "✅" if u["is_anonymous"] else "❌",
+        referral_count
+    )
+    profile_text += "\n\n" + t["referral_link_text"].format(referral_link)
+    await c.message.edit_text(
+        profile_text,
+        reply_markup=profile_kb(lang),
+        parse_mode="HTML",
+        disable_web_page_preview=True
+    )
+    await c.answer()
+
+
+
+@dp.callback_query(F.data=="rating")
+async def rating(c: CallbackQuery):
+    lang = get_lang(c.from_user.id)
+    with db() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT user_id, wins, games FROM users "
+            "ORDER BY wins DESC, games DESC, user_id ASC LIMIT 10"
+        )
+        rows = cur.fetchall()
+    lines = [TEXT[lang]["rating_text"]]
+    if not rows:
+        lines.append("\\nӘзірге рейтинг бос." if lang == "kz" else
+                     "\\nРейтинг пока пуст." if lang == "ru" else
+                     "\\nThe leaderboard is empty.")
+    else:
+        for pos, (uid, wins, games) in enumerate(rows, 1):
+            lines.append(f"\\n{pos}. <code>{uid}</code> — {wins}")
+    await c.message.edit_text(
+        "".join(lines),
+        reply_markup=back_kb(lang),
+        parse_mode="HTML"
+    )
+    await c.answer()
+
+@dp.callback_query(F.data=="referrals")
+async def referrals(c: CallbackQuery):
+    lang = get_lang(c.from_user.id)
+    count, link = await get_referral_data(c.from_user.id)
+    await c.message.edit_text(
+        TEXT[lang]["referral_text"].format(count, link),
+        reply_markup=back_kb(lang),
+        parse_mode="HTML",
+        disable_web_page_preview=True
+    )
     await c.answer()
 
 @dp.callback_query(F.data=="balance")
@@ -355,7 +441,7 @@ async def balance(c: CallbackQuery):
 async def language(c: CallbackQuery):
     kb=InlineKeyboardBuilder()
     for code,name in [("kz","🇰🇿 Қазақша"),("ru","🇷🇺 Русский"),("en","🇬🇧 English")]:
-        kb.button(text=name,callback_data=f"setlang_{code}")
+        kb.button(text=name, callback_data=f"setlang_{code}", icon_custom_emoji_id=EMOJI_IDS["info"])
     kb.adjust(1)
     await c.message.edit_text(TEXT[get_lang(c.from_user.id)]["language"],reply_markup=kb.as_markup(),parse_mode="HTML")
     await c.answer()
@@ -396,7 +482,7 @@ async def make_invoice(message: Message,state: FSMContext):
         cur.execute("INSERT INTO payments(order_id,user_id,amount) VALUES(%s,%s,%s)",
                     (order_id,message.from_user.id,amount))
     kb=InlineKeyboardBuilder()
-    kb.row(InlineKeyboardButton(text=TEXT[lang]["pay"],url=invoice.pay_url))
+    kb.row(InlineKeyboardButton(text=TEXT[lang]["pay"], url=invoice.pay_url, icon_custom_emoji_id=EMOJI_IDS["crypto"]))
     await message.answer(TEXT[lang]["created"].format(amount),reply_markup=kb.as_markup(),parse_mode="HTML")
     await state.clear()
 
