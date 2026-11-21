@@ -4,7 +4,8 @@ import random
 import uuid
 from decimal import Decimal
 
-import asyncpg
+import psycopg2
+import psycopg2.extras
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
@@ -20,108 +21,132 @@ LAVEPAY_API_KEY = os.getenv("LAVEPAY_API_KEY")
 LAVEPAY_WEBHOOK_SECRET = os.getenv("LAVEPAY_WEBHOOK_SECRET")
 DB_URL = os.getenv("DATABASE_URL")
 
-# ================= ПРЕМИУМ ЭМОДЗИ ID-ЛЕРІ (Тек мәтін мен батырма үшін) =================
-# Осы жерге өзіңіздің премиум эмодзилеріңіздің ID-лерін қойыңыз
-EMOJI_DICE = "5368324170671202286"   # Мәтіндегі кости үшін
-EMOJI_BJ = "5368324170671202286"     # Мәтіндегі блекджек үшін
-EMOJI_DARTS = "5368324170671202286"  # Мәтіндегі дартс үшін
-EMOJI_WALLET = "5368324170671202286" # Әмиян
-EMOJI_TROPHY = "5368324170671202286" # Кубок
-EMOJI_LANG = "5368324170671202286"   # Тіл
-EMOJI_PROFILE = "5368324170671202286"# Профиль
-EMOJI_WITHDRAW = "5368324170671202286"# Шығару
+# Егер Railway сілтемесінде postgresql:// болса, psycopg2 онымен тікелей жұмыс істейді.
+# Егер postgres:// болса, оны postgresql:// деп ауыстырамыз (psycopg2 үшін).
+if DB_URL and DB_URL.startswith("postgres://"):
+    DB_URL = DB_URL.replace("postgres://", "postgresql://", 1)
 
-# ================= БОТ ЖӘНЕ ДЕРЕКҚОР =================
+# ================= ПРЕМИУМ ЭМОДЗИ ID-ЛЕРІ =================
+EMOJI_DICE = "5368324170671202286"
+EMOJI_BJ = "5368324170671202286"
+EMOJI_DARTS = "5368324170671202286"
+EMOJI_WALLET = "5368324170671202286"
+EMOJI_TROPHY = "5368324170671202286"
+EMOJI_LANG = "5368324170671202286"
+EMOJI_PROFILE = "5368324170671202286"
+EMOJI_WITHDRAW = "5368324170671202286"
+
+# ================= БОТ =================
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
-db_pool = None
 lp = LavePay(LAVEPAY_API_KEY, webhook_secret=LAVEPAY_WEBHOOK_SECRET)
 
-# ================= ДЕРЕКҚОРДЫ ИНИЦИАЛИЗАЦИЯЛАУ =================
-async def init_db():
-    global db_pool
-    db_pool = await asyncpg.create_pool(DB_URL)
-    async with db_pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id BIGINT PRIMARY KEY,
-                balance REAL DEFAULT 0.0,
-                lang TEXT DEFAULT 'kz',
-                wins INTEGER DEFAULT 0,
-                losses INTEGER DEFAULT 0,
-                games INTEGER DEFAULT 0
-            )
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS lobbies (
-                lobby_id TEXT PRIMARY KEY,
-                host_id BIGINT,
-                game_type TEXT,
-                status TEXT DEFAULT 'waiting'
-            )
-        """)
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS lobby_players (
-                lobby_id TEXT REFERENCES lobbies(lobby_id) ON DELETE CASCADE,
-                user_id BIGINT,
-                PRIMARY KEY (lobby_id, user_id)
-            )
-        """)
+# ================= ДЕРЕКҚОР ФУНКЦИЯЛАРЫ (psycopg2) =================
+def get_db():
+    return psycopg2.connect(DB_URL)
 
-# ================= ДЕРЕКҚОР ФУНКЦИЯЛАРЫ =================
-async def get_user(user_id):
-    async with db_pool.acquire() as conn:
-        row = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
-        if not row:
-            await conn.execute("INSERT INTO users (user_id) VALUES ($1)", user_id)
-            row = await conn.fetchrow("SELECT * FROM users WHERE user_id = $1", user_id)
-        return row
+def init_db():
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id BIGINT PRIMARY KEY,
+                    balance REAL DEFAULT 0.0,
+                    lang TEXT DEFAULT 'kz',
+                    wins INTEGER DEFAULT 0,
+                    losses INTEGER DEFAULT 0,
+                    games INTEGER DEFAULT 0
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS lobbies (
+                    lobby_id TEXT PRIMARY KEY,
+                    host_id BIGINT,
+                    game_type TEXT,
+                    status TEXT DEFAULT 'waiting'
+                )
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS lobby_players (
+                    lobby_id TEXT REFERENCES lobbies(lobby_id) ON DELETE CASCADE,
+                    user_id BIGINT,
+                    PRIMARY KEY (lobby_id, user_id)
+                )
+            """)
+            conn.commit()
 
-async def update_balance(user_id, amount):
-    async with db_pool.acquire() as conn:
-        await conn.execute("UPDATE users SET balance = balance + $1 WHERE user_id = $2", amount, user_id)
+def get_user(user_id):
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+            row = cur.fetchone()
+            if not row:
+                cur.execute("INSERT INTO users (user_id) VALUES (%s) ON CONFLICT DO NOTHING", (user_id,))
+                conn.commit()
+                cur.execute("SELECT * FROM users WHERE user_id = %s", (user_id,))
+                row = cur.fetchone()
+            return row
 
-async def set_lang(user_id, lang):
-    async with db_pool.acquire() as conn:
-        await conn.execute("UPDATE users SET lang = $1 WHERE user_id = $2", lang, user_id)
+def update_balance(user_id, amount):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET balance = balance + %s WHERE user_id = %s", (amount, user_id))
+            conn.commit()
 
-async def update_profile(user_id, win: bool):
-    async with db_pool.acquire() as conn:
-        if win:
-            await conn.execute("UPDATE users SET wins = wins + 1, games = games + 1 WHERE user_id = $1", user_id)
-        else:
-            await conn.execute("UPDATE users SET losses = losses + 1, games = games + 1 WHERE user_id = $1", user_id)
+def set_lang(user_id, lang):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET lang = %s WHERE user_id = %s", (lang, user_id))
+            conn.commit()
 
-async def create_lobby_db(lobby_id, host_id, game_type):
-    async with db_pool.acquire() as conn:
-        await conn.execute("INSERT INTO lobbies (lobby_id, host_id, game_type) VALUES ($1, $2, $3)", lobby_id, host_id, game_type)
-        await conn.execute("INSERT INTO lobby_players (lobby_id, user_id) VALUES ($1, $2)", lobby_id, host_id)
+def update_profile(user_id, win: bool):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            if win:
+                cur.execute("UPDATE users SET wins = wins + 1, games = games + 1 WHERE user_id = %s", (user_id,))
+            else:
+                cur.execute("UPDATE users SET losses = losses + 1, games = games + 1 WHERE user_id = %s", (user_id,))
+            conn.commit()
 
-async def join_lobby_db(lobby_id, user_id):
-    async with db_pool.acquire() as conn:
-        exists = await conn.fetchval("SELECT 1 FROM lobby_players WHERE lobby_id = $1 AND user_id = $2", lobby_id, user_id)
-        if not exists:
-            await conn.execute("INSERT INTO lobby_players (lobby_id, user_id) VALUES ($1, $2)", lobby_id, user_id)
+def create_lobby_db(lobby_id, host_id, game_type):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("INSERT INTO lobbies (lobby_id, host_id, game_type) VALUES (%s, %s, %s)", (lobby_id, host_id, game_type))
+            cur.execute("INSERT INTO lobby_players (lobby_id, user_id) VALUES (%s, %s)", (lobby_id, host_id))
+            conn.commit()
 
-async def get_lobby_players(lobby_id):
-    async with db_pool.acquire() as conn:
-        rows = await conn.fetch("SELECT user_id FROM lobby_players WHERE lobby_id = $1", lobby_id)
-        return [row["user_id"] for row in rows]
+def join_lobby_db(lobby_id, user_id):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM lobby_players WHERE lobby_id = %s AND user_id = %s", (lobby_id, user_id))
+            if not cur.fetchone():
+                cur.execute("INSERT INTO lobby_players (lobby_id, user_id) VALUES (%s, %s)", (lobby_id, user_id))
+                conn.commit()
 
-async def get_lobby(lobby_id):
-    async with db_pool.acquire() as conn:
-        return await conn.fetchrow("SELECT * FROM lobbies WHERE lobby_id = $1", lobby_id)
+def get_lobby_players(lobby_id):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT user_id FROM lobby_players WHERE lobby_id = %s", (lobby_id,))
+            return [row[0] for row in cur.fetchall()]
 
-async def delete_lobby(lobby_id):
-    async with db_pool.acquire() as conn:
-        await conn.execute("DELETE FROM lobbies WHERE lobby_id = $1", lobby_id)
+def get_lobby(lobby_id):
+    with get_db() as conn:
+        with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+            cur.execute("SELECT * FROM lobbies WHERE lobby_id = %s", (lobby_id,))
+            return cur.fetchone()
+
+def delete_lobby(lobby_id):
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM lobbies WHERE lobby_id = %s", (lobby_id,))
+            conn.commit()
 
 # ================= FSM КҮЙЛЕРІ =================
 class WithdrawState(StatesGroup):
     amount = State()
     address = State()
 
-# ================= ТІЛДЕР (Премиум эмодзилер тек мәтінде) =================
+# ================= ТІЛДЕР =================
 TEXTS = {
     "kz": {
         "welcome": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> Сәлем! **Duel Games**!\n\n💰 Балансыңыз: **${{:.2f}}**\n\nНе істейміз?',
@@ -224,7 +249,7 @@ def lang_kb():
     kb.adjust(1)
     return kb.as_markup()
 
-async def main_menu_kb(lang, user_id):
+def main_menu_kb(lang):
     kb = InlineKeyboardBuilder()
     kb.button(text=TEXTS[lang]["btn_play"], callback_data="play_menu")
     kb.button(text=TEXTS[lang]["btn_profile"], callback_data="profile")
@@ -246,28 +271,27 @@ def games_kb(lang):
 @dp.message(CommandStart())
 async def start(message: Message, state: FSMContext):
     await state.clear()
-    await get_user(message.from_user.id)
-    user = await get_user(message.from_user.id)
+    user = get_user(message.from_user.id)
     args = message.text.split()
     
     if len(args) > 1 and args[1].startswith("lobby_"):
         lobby_id = args[1].replace("lobby_", "")
-        lobby = await get_lobby(lobby_id)
+        lobby = get_lobby(lobby_id)
         if lobby:
-            players = await get_lobby_players(lobby_id)
+            players = get_lobby_players(lobby_id)
             if message.from_user.id not in players:
                 if len(players) >= 2:
                     lang = user["lang"]
                     await message.answer(TEXTS[lang]["lobby_full"])
                     return
-                await join_lobby_db(lobby_id, message.from_user.id)
+                join_lobby_db(lobby_id, message.from_user.id)
                 players.append(message.from_user.id)
             
             lang = user["lang"]
             await message.answer(TEXTS[lang]["lobby_joined"].format(lobby_id), parse_mode="HTML")
             
             host_id = lobby["host_id"]
-            host = await get_user(host_id)
+            host = get_user(host_id)
             host_lang = host["lang"]
             
             player_mentions = ", ".join([f"[{p}](tg://user?id={p})" for p in players])
@@ -288,28 +312,28 @@ async def start(message: Message, state: FSMContext):
     if user["lang"]:
         lang = user["lang"]
         balance = user["balance"]
-        await message.answer(TEXTS[lang]["welcome"].format(balance), reply_markup=await main_menu_kb(lang, message.from_user.id), parse_mode="HTML")
+        await message.answer(TEXTS[lang]["welcome"].format(balance), reply_markup=main_menu_kb(lang), parse_mode="HTML")
     else:
         await message.answer(TEXTS["kz"]["lang_select"], reply_markup=lang_kb(), parse_mode="HTML")
 
 @dp.callback_query(F.data.startswith("lang_"))
 async def set_lang_cb(call: CallbackQuery):
     lang = call.data.split("_")[1]
-    await set_lang(call.from_user.id, lang)
-    user = await get_user(call.from_user.id)
-    await call.message.edit_text(TEXTS[lang]["welcome"].format(user["balance"]), reply_markup=await main_menu_kb(lang, call.from_user.id), parse_mode="HTML")
+    set_lang(call.from_user.id, lang)
+    user = get_user(call.from_user.id)
+    await call.message.edit_text(TEXTS[lang]["welcome"].format(user["balance"]), reply_markup=main_menu_kb(lang), parse_mode="HTML")
     await call.answer()
 
 @dp.callback_query(F.data == "back_main")
 async def back_main(call: CallbackQuery):
-    user = await get_user(call.from_user.id)
+    user = get_user(call.from_user.id)
     lang = user["lang"]
-    await call.message.edit_text(TEXTS[lang]["welcome"].format(user["balance"]), reply_markup=await main_menu_kb(lang, call.from_user.id), parse_mode="HTML")
+    await call.message.edit_text(TEXTS[lang]["welcome"].format(user["balance"]), reply_markup=main_menu_kb(lang), parse_mode="HTML")
     await call.answer()
 
 @dp.callback_query(F.data == "play_menu")
 async def play_menu(call: CallbackQuery):
-    user = await get_user(call.from_user.id)
+    user = get_user(call.from_user.id)
     lang = user["lang"]
     await call.message.edit_text(TEXTS[lang]["choose_game"], reply_markup=games_kb(lang), parse_mode="HTML")
     await call.answer()
@@ -317,12 +341,12 @@ async def play_menu(call: CallbackQuery):
 # ================= ЛОББИ ҚҰРУ =================
 @dp.callback_query(F.data.startswith("create_lobby_"))
 async def create_lobby(call: CallbackQuery):
-    user = await get_user(call.from_user.id)
+    user = get_user(call.from_user.id)
     lang = user["lang"]
     game_type = call.data.split("_")[2]
     
     lobby_id = str(uuid.uuid4())[:6].upper()
-    await create_lobby_db(lobby_id, call.from_user.id, game_type)
+    create_lobby_db(lobby_id, call.from_user.id, game_type)
     
     game_name = {
         "dice": TEXTS[lang]["btn_dice_lobby"],
@@ -346,13 +370,12 @@ async def create_lobby(call: CallbackQuery):
 # ================= ОЙЫНДЫ БАСТАУ =================
 async def start_game(lobby_id, players, game_type):
     p1, p2 = players
-    user1 = await get_user(p1)
+    user1 = get_user(p1)
     lang = user1["lang"]
     
     await bot.send_message(p1, TEXTS[lang]["lobby_started"].format(lobby_id))
     await bot.send_message(p2, TEXTS[lang]["lobby_started"].format(lobby_id))
     
-    # Ойын кезінде ТЕК СТАНДАРТТЫ эмодзилер қолданылады
     if game_type == "dice":
         await play_dice_duel(p1, p2)
     elif game_type == "darts":
@@ -361,13 +384,12 @@ async def start_game(lobby_id, players, game_type):
         await bot.send_message(p1, "🃏 Блекджек әзірге дайындалып жатыр.")
         await bot.send_message(p2, "🃏 Блекджек әзірге дайындалып жатыр.")
     
-    await delete_lobby(lobby_id)
+    delete_lobby(lobby_id)
 
-# ================= ОЙЫН ЛОГИКАСЫ (Стандартты эмодзи) =================
+# ================= ОЙЫН ЛОГИКАСЫ =================
 async def play_dice_duel(p1, p2):
     chat_id = p1
     await bot.send_message(chat_id, "🎲 1-ойыншы лақтырып жатыр...")
-    # Мұнда стандартты 🎲 қолданылады, өйткені бұл ойынның өзі
     d1 = await bot.send_dice(chat_id, emoji="🎲")
     d2 = await bot.send_dice(chat_id, emoji="🎲")
     d3 = await bot.send_dice(chat_id, emoji="🎲")
@@ -381,16 +403,16 @@ async def play_dice_duel(p1, p2):
     await asyncio.sleep(4)
     score2 = d4.dice.value + d5.dice.value + d6.dice.value
     
-    user1 = await get_user(p1)
+    user1 = get_user(p1)
     lang = user1["lang"]
     
     if score1 > score2:
-        await update_profile(p1, True)
-        await update_profile(p2, False)
+        update_profile(p1, True)
+        update_profile(p2, False)
         await bot.send_message(chat_id, TEXTS[lang]["win"].format(f"1-ойыншы ({score1} vs {score2})"))
     elif score2 > score1:
-        await update_profile(p1, False)
-        await update_profile(p2, True)
+        update_profile(p1, False)
+        update_profile(p2, True)
         await bot.send_message(chat_id, TEXTS[lang]["win"].format(f"2-ойыншы ({score1} vs {score2})"))
     else:
         await bot.send_message(chat_id, TEXTS[lang]["tie"])
@@ -398,7 +420,6 @@ async def play_dice_duel(p1, p2):
 async def play_darts_duel(p1, p2):
     chat_id = p1
     await bot.send_message(chat_id, "🎯 1-ойыншы лақтырып жатыр...")
-    # Мұнда стандартты 🎯 қолданылады
     dart1 = await bot.send_dice(chat_id, emoji="🎯")
     await asyncio.sleep(3)
     
@@ -406,16 +427,16 @@ async def play_darts_duel(p1, p2):
     dart2 = await bot.send_dice(chat_id, emoji="🎯")
     await asyncio.sleep(3)
     
-    user1 = await get_user(p1)
+    user1 = get_user(p1)
     lang = user1["lang"]
     
     if dart1.dice.value > dart2.dice.value:
-        await update_profile(p1, True)
-        await update_profile(p2, False)
+        update_profile(p1, True)
+        update_profile(p2, False)
         await bot.send_message(chat_id, TEXTS[lang]["win"].format(f"1-ойыншы ({dart1.dice.value} vs {dart2.dice.value})"))
     elif dart2.dice.value > dart1.dice.value:
-        await update_profile(p1, False)
-        await update_profile(p2, True)
+        update_profile(p1, False)
+        update_profile(p2, True)
         await bot.send_message(chat_id, TEXTS[lang]["win"].format(f"2-ойыншы ({dart1.dice.value} vs {dart2.dice.value})"))
     else:
         await bot.send_message(chat_id, TEXTS[lang]["tie"])
@@ -423,15 +444,15 @@ async def play_darts_duel(p1, p2):
 # ================= ПРОФИЛЬ ЖӘНЕ БАЛАНС =================
 @dp.callback_query(F.data == "profile")
 async def profile(call: CallbackQuery):
-    user = await get_user(call.from_user.id)
+    user = get_user(call.from_user.id)
     lang = user["lang"]
     text = TEXTS[lang]["profile_text"].format(user["user_id"], user["wins"], user["losses"], user["games"])
-    await call.message.edit_text(text, reply_markup=await main_menu_kb(lang, call.from_user.id), parse_mode="HTML")
+    await call.message.edit_text(text, reply_markup=main_menu_kb(lang), parse_mode="HTML")
     await call.answer()
 
 @dp.callback_query(F.data == "balance")
 async def balance(call: CallbackQuery):
-    user = await get_user(call.from_user.id)
+    user = get_user(call.from_user.id)
     lang = user["lang"]
     usd = user["balance"]
     
@@ -439,20 +460,20 @@ async def balance(call: CallbackQuery):
     rub = usd * 90.0
     
     text = TEXTS[lang]["balance_text"].format(usd, kzt, rub)
-    await call.message.edit_text(text, reply_markup=await main_menu_kb(lang, call.from_user.id), parse_mode="HTML")
+    await call.message.edit_text(text, reply_markup=main_menu_kb(lang), parse_mode="HTML")
     await call.answer()
 
 # ================= ТӨЛЕМ (ПОПОЛНЕНИЕ) =================
 @dp.callback_query(F.data == "deposit")
 async def deposit_handler(call: CallbackQuery):
-    user = await get_user(call.from_user.id)
+    user = get_user(call.from_user.id)
     lang = user["lang"]
     await call.message.edit_text(TEXTS[lang]["deposit_enter"], parse_mode="HTML")
     await call.answer()
 
 @dp.message(F.text.regexp(r"^\d+(\.\d{1,2})?$"))
 async def process_amount(message: Message):
-    user = await get_user(message.from_user.id)
+    user = get_user(message.from_user.id)
     lang = user["lang"]
     
     try:
@@ -489,9 +510,9 @@ async def on_payment(invoice):
         user_id = int(parts[1])
         amount = float(invoice.amount)
         
-        await update_balance(user_id, amount)
+        update_balance(user_id, amount)
         
-        user = await get_user(user_id)
+        user = get_user(user_id)
         lang = user["lang"]
         await bot.send_message(user_id, TEXTS[lang]["deposit_paid"].format(user["balance"]), parse_mode="HTML")
     except Exception as e:
@@ -500,7 +521,7 @@ async def on_payment(invoice):
 # ================= ВЫВОД =================
 @dp.callback_query(F.data == "withdraw")
 async def withdraw_handler(call: CallbackQuery, state: FSMContext):
-    user = await get_user(call.from_user.id)
+    user = get_user(call.from_user.id)
     lang = user["lang"]
     await state.set_state(WithdrawState.amount)
     await call.message.edit_text(TEXTS[lang]["withdraw_enter_amount"].format(user["balance"]), parse_mode="HTML")
@@ -508,7 +529,7 @@ async def withdraw_handler(call: CallbackQuery, state: FSMContext):
 
 @dp.message(WithdrawState.amount, F.text.regexp(r"^\d+(\.\d{1,2})?$"))
 async def process_withdraw_amount(message: Message, state: FSMContext):
-    user = await get_user(message.from_user.id)
+    user = get_user(message.from_user.id)
     lang = user["lang"]
     
     try:
@@ -529,7 +550,7 @@ async def process_withdraw_amount(message: Message, state: FSMContext):
 
 @dp.message(WithdrawState.address)
 async def process_withdraw_address(message: Message, state: FSMContext):
-    user = await get_user(message.from_user.id)
+    user = get_user(message.from_user.id)
     lang = user["lang"]
     data = await state.get_data()
     amount = Decimal(data.get("withdraw_amount"))
@@ -549,11 +570,11 @@ async def process_withdraw_address(message: Message, state: FSMContext):
             address=address
         )
         
-        await update_balance(message.from_user.id, -float(amount))
-        user = await get_user(message.from_user.id)
+        update_balance(message.from_user.id, -float(amount))
+        user = get_user(message.from_user.id)
         
         await message.answer(TEXTS[lang]["withdraw_success"].format(f"{withdraw_amount:.2f}"), parse_mode="HTML")
-        await message.answer(TEXTS[lang]["welcome"].format(user["balance"]), reply_markup=await main_menu_kb(lang, message.from_user.id), parse_mode="HTML")
+        await message.answer(TEXTS[lang]["welcome"].format(user["balance"]), reply_markup=main_menu_kb(lang), parse_mode="HTML")
         
     except Exception as e:
         await message.answer(TEXTS[lang]["withdraw_fail"])
@@ -563,8 +584,13 @@ async def process_withdraw_address(message: Message, state: FSMContext):
 
 # ================= ІСКЕ ҚОСУ =================
 async def main():
-    await init_db()
-    print("Duel Games + PostgreSQL іске қосылды!")
+    try:
+        init_db()
+        print("Duel Games + PostgreSQL (psycopg2) іске қосылды!")
+    except Exception as e:
+        print(f"Дерекқорға қосылу қатесі: {e}")
+        return
+
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
