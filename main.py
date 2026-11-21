@@ -159,9 +159,9 @@ TEXT = {
  "kz": {
   "welcome":"Сәлем! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Балансыңыз: <b>${:.2f}</b>\n\nНе істейміз?",
   "play":"Ойын ойнау","profile":"Профиль","balance":"Баланс","rating":"Рейтинг","referrals":"Реферал","deposit":"Пополнить","withdraw":"Вывод","lang":"Тіл",
-  "choose":e("play","🎮") + " Ойынды таңдаңыз:","dice":"🎲 Кости дуэль","darts":"🎯 Дартс дуэль","bet":"Ставканы енгізіңіз (USD):",
-  "no_money":"❌ Балансыңыз жеткіліксіз!","deposit_amount":e("wallet","💵") + " Толықтырғыңыз келетін соманы USD түрінде енгізіңіз:",
-  "pay":"💳 Төлеу","created":e("crypto","💳") + " Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
+  "choose":e("play","🎮") + " Ойынды таңдаңыз:","dice":"Кости дуэль","darts":"Дартс дуэль","bet":"Ставканы енгізіңіз (USD):",
+  "no_money":e("info","❗") + " Балансыңыз жеткіліксіз!","deposit_amount":e("wallet","💵") + " Толықтырғыңыз келетін соманы USD түрінде енгізіңіз:",
+  "pay":"Төлеу","created":e("crypto","💳") + " Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
   "paid":e("wallet","💵") + " Төлем қабылданды! Жаңа баланс: ${:.2f}",
   "withdraw_amount":e("crypto","💳") + " Шығарылатын соманы енгізіңіз (ең азы $1):",
   "withdraw_address":e("usdt","💵") + " USDT TRC20 әмиян мекенжайын енгізіңіз:",
@@ -172,14 +172,14 @@ TEXT = {
   "referral_text":e("info","👥") + " <b>Реферал жүйесі</b>\n\nДосыңды шақыр. Тіркелген реферал саны: <b>{}</b>\n\nСенің сілтемең:\n<code>{}</code>",
   "referral_link_text":e("info","🔗") + " Шақыру сілтемесі: <code>{}</code>",
   "language":e("info","❗") + " Тілді таңдаңыз:",
-  "back":"⬅️ Артқа","bad_amount":"❌ Соманы дұрыс енгізіңіз.","admin_only":"Бұл команда тек әкімшіге арналған.",
+  "back":"Артқа","bad_amount":e("info","❗") + " Соманы дұрыс енгізіңіз.","admin_only":"Бұл команда тек әкімшіге арналған.",
  },
  "ru": {
   "welcome":"Привет! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Баланс: <b>${:.2f}</b>\n\nЧто делаем?",
   "play":"Играть","profile":"Профиль","balance":"Баланс","rating":"Рейтинг","referrals":"Рефералы","deposit":"Пополнить","withdraw":"Вывод","lang":"Язык",
-  "choose":e("play","🎮") + " Выберите игру:","dice":"🎲 Дуэль на костях","darts":"🎯 Дуэль в дартс","bet":"Введите ставку (USD):",
-  "no_money":"❌ Недостаточно средств!","deposit_amount":e("wallet","💵") + " Введите сумму пополнения в USD:",
-  "pay":"💳 Оплатить","created":e("crypto","💳") + " Счёт создан на ${}. Нажмите кнопку оплаты.",
+  "choose":e("play","🎮") + " Выберите игру:","dice":"Дуэль на костях","darts":"Дуэль в дартс","bet":"Введите ставку (USD):",
+  "no_money":e("info","❗") + " Недостаточно средств!","deposit_amount":e("wallet","💵") + " Введите сумму пополнения в USD:",
+  "pay":"Оплатить","created":e("crypto","💳") + " Счёт создан на ${}. Нажмите кнопку оплаты.",
   "paid":e("wallet","💵") + " Платёж получен! Новый баланс: ${:.2f}",
   "withdraw_amount":e("crypto","💳") + " Введите сумму вывода (минимум $1):",
   "withdraw_address":e("usdt","💵") + " Введите адрес USDT TRC20:",
@@ -190,14 +190,14 @@ TEXT = {
   "referral_text":e("info","👥") + " <b>Реферальная система</b>\n\nПриглашай друзей. Зарегистрировано рефералов: <b>{}</b>\n\nТвоя ссылка:\n<code>{}</code>",
   "referral_link_text":e("info","🔗") + " Шақыру сілтемесі: <code>{}</code>",
   "language":e("info","❗") + " Выберите язык:",
-  "back":"⬅️ Назад","bad_amount":"❌ Введите корректную сумму.","admin_only":"Только для администратора.",
+  "back":"Назад","bad_amount":e("info","❗") + " Введите корректную сумму.","admin_only":"Только для администратора.",
  },
  "en": {
   "welcome":"Hi! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Balance: <b>${:.2f}</b>\n\nWhat do we do?",
   "play":"Play","profile":"Profile","balance":"Balance","rating":"Rating","referrals":"Referrals","deposit":"Deposit","withdraw":"Withdraw","lang":"Language",
-  "choose":e("play","🎮") + " Choose a game:","dice":"🎲 Dice duel","darts":"🎯 Darts duel","bet":"Enter bet (USD):",
-  "no_money":"❌ Insufficient balance!","deposit_amount":e("wallet","💵") + " Enter deposit amount in USD:",
-  "pay":"💳 Pay","created":e("crypto","💳") + " Invoice created for ${}. Tap to pay.",
+  "choose":e("play","🎮") + " Choose a game:","dice":"Dice duel","darts":"Darts duel","bet":"Enter bet (USD):",
+  "no_money":e("info","❗") + " Insufficient balance!","deposit_amount":e("wallet","💵") + " Enter deposit amount in USD:",
+  "pay":"Pay","created":e("crypto","💳") + " Invoice created for ${}. Tap to pay.",
   "paid":e("wallet","💵") + " Payment received! New balance: ${:.2f}",
   "withdraw_amount":e("crypto","💳") + " Enter withdrawal amount (minimum $1):",
   "withdraw_address":e("usdt","💵") + " Enter your USDT TRC20 wallet address:",
@@ -208,7 +208,7 @@ TEXT = {
   "referral_text":e("info","👥") + " <b>Referral system</b>\n\nInvite friends. Registered referrals: <b>{}</b>\n\nYour link:\n<code>{}</code>",
   "referral_link_text":e("info","🔗") + " Invite link: <code>{}</code>",
   "language":e("info","❗") + " Choose language:",
-  "back":"⬅️ Back","bad_amount":"❌ Enter a valid amount.","admin_only":"Admin only.",
+  "back":"Back","bad_amount":e("info","❗") + " Enter a valid amount.","admin_only":"Admin only.",
  }
 }
 
@@ -367,7 +367,7 @@ async def run_duel(lobby_id,players,game,bet,chat_id):
             prize=(bet*2*Decimal("0.95")).quantize(Decimal("0.01"))
             cur.execute("UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s",(prize,winner))
             cur.execute("UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s",(loser,))
-            result=f"🏆 Жеңімпаз: {winner}. Ұтыс: ${prize}"
+            result=e("win","🏆") + f" Жеңімпаз: {winner}. Ұтыс: ${prize}"
         cur.execute("DELETE FROM lobbies WHERE lobby_id=%s",(lobby_id,))
     await bot.send_message(chat_id,result)
 
@@ -379,8 +379,8 @@ async def profile(c: CallbackQuery):
     referral_count, referral_link = await get_referral_data(c.from_user.id)
     profile_text = t["profile_text"].format(
         u["user_id"], u["wins"], u["losses"], u["games"],
-        "✅" if u["is_vip"] else "❌",
-        "✅" if u["is_anonymous"] else "❌",
+        "✓" if u["is_vip"] else "✗",
+        "✓" if u["is_anonymous"] else "✗",
         referral_count
     )
     profile_text += "\n\n" + t["referral_link_text"].format(referral_link)
@@ -397,8 +397,8 @@ async def profile(c: CallbackQuery):
 @dp.callback_query(F.data=="rating")
 async def rating(c: CallbackQuery):
     lang = get_lang(c.from_user.id)
-    with db() as conn, conn.cursor() as cur:
-        cur.execute(
+    with db() as conn, conn.cursor() as cur:  
+            cur.execute(
             "SELECT user_id, wins, games FROM users "
             "ORDER BY wins DESC, games DESC, user_id ASC LIMIT 10"
         )
@@ -440,7 +440,7 @@ async def balance(c: CallbackQuery):
 @dp.callback_query(F.data=="language")
 async def language(c: CallbackQuery):
     kb=InlineKeyboardBuilder()
-    for code,name in [("kz","🇰🇿 Қазақша"),("ru","🇷🇺 Русский"),("en","🇬🇧 English")]:
+    for code,name in [("kz","Қазақша"),("ru","Русский"),("en","English")]:
         kb.button(text=name, callback_data=f"setlang_{code}", icon_custom_emoji_id=EMOJI_IDS["info"])
     kb.adjust(1)
     await c.message.edit_text(TEXT[get_lang(c.from_user.id)]["language"],reply_markup=kb.as_markup(),parse_mode="HTML")
