@@ -55,8 +55,34 @@ EMOJI_IDS = {
     "anonymous": "5251422397893989847",
 }
 
+
+EMOJI_FALLBACK = {
+    "wallet": "💰",
+    "balance": "💵",
+    "crypto": "💳",
+    "play": "🎮",
+    "dice": "🎲",
+    "darts": "🎯",
+    "profile": "👤",
+    "vip": "👑",
+    "win": "🏆",
+    "lose": "❌",
+    "back": "⬅️",
+    "info": "ℹ️",
+    "admin": "🛡️",
+    "usdt": "💵",
+    "rub": "💴",
+    "kzt": "💸",
+    "id": "🆔",
+    "games": "🎮",
+    "anonymous": "👤",
+}
+
 def e(key, fallback=""):
-    return f'<tg-emoji emoji-id="{EMOJI_IDS[key]}">·</tg-emoji>'
+    emoji = EMOJI_FALLBACK.get(key, "⭐")
+    emoji_id = EMOJI_IDS[key]
+    return f'<tg-emoji emoji-id="{emoji_id}">{emoji}</tg-emoji>'
+
 
 
 @contextmanager
