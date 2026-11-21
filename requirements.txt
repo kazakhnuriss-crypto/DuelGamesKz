@@ -1,0 +1,5 @@
+aiogram==3.22.0
+lavepay[fastapi]==0.1.0
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+psycopg2-binary>=2.9.9,<3.0
