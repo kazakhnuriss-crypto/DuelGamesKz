@@ -34,6 +34,39 @@ dp = Dispatcher()
 lp = LavePay(LAVEPAY_API_KEY, webhook_secret=LAVEPAY_WEBHOOK_SECRET)
 app = FastAPI(title="Duel Games LavePay webhook")
 
+# ---------- User-provided Telegram Premium custom emoji IDs ----------
+EMOJI_IDS = {
+    "wallet": "5420271804411292547",
+    "balance": "5992085874546844207",
+    "crypto": "5940552778165264297",
+    "play": "5766994197705921104",
+    "dice": "5402282535755461614",
+    "darts": "5400331881868698012",
+    "profile": "6032693626394382504",
+    "vip": "5251422397893989847",
+    "win": "5449683594425410231",
+    "lose": "5447183459602669338",
+    "back": "5240241223632954241",
+    "info": "5274099962655816924",
+    "admin": "5274099962655816924",
+    "usdt": "5409048419211682843",
+    "rub": "5231449120635370684",
+    "kzt": "5364045318092504570",
+    "id": "5291913773307667021",
+    "games": "5282843764451195532",
+    "anonymous": "5251422397893989847",
+}
+
+def e(key, fallback):
+    # Use Telegram HTML custom-emoji entities in message text.
+    return f'<tg-emoji emoji-id="{EMOJI_IDS[key]}">{fallback}</tg-emoji>'
+
+
+# Premium emoji placement:
+# wallet=home/deposit, balance=balance card, crypto=withdraw/pay,
+# play/dice/darts=game menu, profile/id/win/lose/games/vip/anonymous=profile,
+# back=back navigation, info/admin=language/admin context,
+# usdt/rub/kzt=currency labels when those currency choices are shown.
 # ---------- Database ----------
 @contextmanager
 def db():
@@ -116,49 +149,49 @@ def money(value):
 # ---------- Text / keyboards ----------
 TEXT = {
  "kz": {
-  "welcome":"Сәлем! <b>Duel Games</b>!\n\n💵 Балансыңыз: <b>${:.2f}</b>\n\nНе істейміз?",
+  "welcome":"Сәлем! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Балансыңыз: <b>${:.2f}</b>\n\nНе істейміз?",
   "play":"Ойын ойнау","profile":"Профиль","balance":"Баланс","deposit":"Пополнить","withdraw":"Вывод","lang":"Тіл",
-  "choose":"Ойынды таңдаңыз:","dice":"Кости дуэль","darts":"Дартс дуэль","bet":"Ставканы енгізіңіз (USD):",
-  "no_money":"❌ Балансыңыз жеткіліксіз!","deposit_amount":"Толықтырғыңыз келетін соманы USD түрінде енгізіңіз:",
-  "pay":"💳 Төлеу","created":"✅ Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
-  "paid":"✅ Төлем қабылданды! Жаңа баланс: ${:.2f}",
-  "withdraw_amount":"Шығарылатын соманы енгізіңіз (ең азы $1):",
-  "withdraw_address":"USDT TRC20 әмиян мекенжайын енгізіңіз:",
+  "choose":e("play","🎮") + " Ойынды таңдаңыз:","dice":"🎲 Кости дуэль","darts":"🎯 Дартс дуэль","bet":"Ставканы енгізіңіз (USD):",
+  "no_money":"❌ Балансыңыз жеткіліксіз!","deposit_amount":e("wallet","💵") + " Толықтырғыңыз келетін соманы USD түрінде енгізіңіз:",
+  "pay":"💳 Төлеу","created":e("crypto","💳") + " Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
+  "paid":e("wallet","💵") + " Төлем қабылданды! Жаңа баланс: ${:.2f}",
+  "withdraw_amount":e("crypto","💳") + " Шығарылатын соманы енгізіңіз (ең азы $1):",
+  "withdraw_address":e("usdt","💵") + " USDT TRC20 әмиян мекенжайын енгізіңіз:",
   "withdraw_sent":"Өтінім қабылданды. Әкімші тексергеннен кейін өңдейді.",
-  "profile_text":"👤 <b>Профиль</b>\nID: <code>{}</code>\nЖеңістер: {}\nЖеңілістер: {}\nОйындар: {}\nVIP: {}\nАноним: {}",
-  "balance_text":"💰 Баланс: ${:.2f}",
-  "language":"Тілді таңдаңыз:",
-  "back":"Артқа","bad_amount":"❌ Соманы дұрыс енгізіңіз.","admin_only":"Бұл команда тек әкімшіге арналған.",
+  "profile_text":e("profile","👤") + " <b>Профиль</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Жеңістер: {}\n" + e("lose","❌") + " Жеңілістер: {}\n" + e("games","🎮") + " Ойындар: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Аноним: {}",
+  "balance_text":e("balance","💰") + " Баланс: ${:.2f}",
+  "language":e("info","❗") + " Тілді таңдаңыз:",
+  "back":"⬅️ Артқа","bad_amount":"❌ Соманы дұрыс енгізіңіз.","admin_only":"Бұл команда тек әкімшіге арналған.",
  },
  "ru": {
-  "welcome":"Привет! <b>Duel Games</b>!\n\n💵 Баланс: <b>${:.2f}</b>\n\nЧто делаем?",
+  "welcome":"Привет! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Баланс: <b>${:.2f}</b>\n\nЧто делаем?",
   "play":"Играть","profile":"Профиль","balance":"Баланс","deposit":"Пополнить","withdraw":"Вывод","lang":"Язык",
-  "choose":"Выберите игру:","dice":"Дуэль на костях","darts":"Дуэль в дартс","bet":"Введите ставку (USD):",
-  "no_money":"❌ Недостаточно средств!","deposit_amount":"Введите сумму пополнения в USD:",
-  "pay":"💳 Оплатить","created":"✅ Счёт создан на ${}. Нажмите кнопку оплаты.",
-  "paid":"✅ Платёж получен! Новый баланс: ${:.2f}",
-  "withdraw_amount":"Введите сумму вывода (минимум $1):",
-  "withdraw_address":"Введите адрес USDT TRC20:",
+  "choose":e("play","🎮") + " Выберите игру:","dice":"🎲 Дуэль на костях","darts":"🎯 Дуэль в дартс","bet":"Введите ставку (USD):",
+  "no_money":"❌ Недостаточно средств!","deposit_amount":e("wallet","💵") + " Введите сумму пополнения в USD:",
+  "pay":"💳 Оплатить","created":e("crypto","💳") + " Счёт создан на ${}. Нажмите кнопку оплаты.",
+  "paid":e("wallet","💵") + " Платёж получен! Новый баланс: ${:.2f}",
+  "withdraw_amount":e("crypto","💳") + " Введите сумму вывода (минимум $1):",
+  "withdraw_address":e("usdt","💵") + " Введите адрес USDT TRC20:",
   "withdraw_sent":"Заявка принята и будет обработана администратором.",
-  "profile_text":"👤 <b>Профиль</b>\nID: <code>{}</code>\nПобеды: {}\nПоражения: {}\nИгры: {}\nVIP: {}\nАноним: {}",
-  "balance_text":"💰 Баланс: ${:.2f}",
-  "language":"Выберите язык:",
-  "back":"Назад","bad_amount":"❌ Введите корректную сумму.","admin_only":"Только для администратора.",
+  "profile_text":e("profile","👤") + " <b>Профиль</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Победы: {}\n" + e("lose","❌") + " Поражения: {}\n" + e("games","🎮") + " Игры: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Аноним: {}",
+  "balance_text":e("balance","💰") + " Баланс: ${:.2f}",
+  "language":e("info","❗") + " Выберите язык:",
+  "back":"⬅️ Назад","bad_amount":"❌ Введите корректную сумму.","admin_only":"Только для администратора.",
  },
  "en": {
-  "welcome":"Hi! <b>Duel Games</b>!\n\n💵 Balance: <b>${:.2f}</b>\n\nWhat do we do?",
+  "welcome":"Hi! <b>Duel Games</b>!\n\n" + e("wallet","💵") + " Balance: <b>${:.2f}</b>\n\nWhat do we do?",
   "play":"Play","profile":"Profile","balance":"Balance","deposit":"Deposit","withdraw":"Withdraw","lang":"Language",
-  "choose":"Choose a game:","dice":"Dice duel","darts":"Darts duel","bet":"Enter bet (USD):",
-  "no_money":"❌ Insufficient balance!","deposit_amount":"Enter deposit amount in USD:",
-  "pay":"💳 Pay","created":"✅ Invoice created for ${}. Tap to pay.",
-  "paid":"✅ Payment received! New balance: ${:.2f}",
-  "withdraw_amount":"Enter withdrawal amount (minimum $1):",
-  "withdraw_address":"Enter your USDT TRC20 wallet address:",
+  "choose":e("play","🎮") + " Choose a game:","dice":"🎲 Dice duel","darts":"🎯 Darts duel","bet":"Enter bet (USD):",
+  "no_money":"❌ Insufficient balance!","deposit_amount":e("wallet","💵") + " Enter deposit amount in USD:",
+  "pay":"💳 Pay","created":e("crypto","💳") + " Invoice created for ${}. Tap to pay.",
+  "paid":e("wallet","💵") + " Payment received! New balance: ${:.2f}",
+  "withdraw_amount":e("crypto","💳") + " Enter withdrawal amount (minimum $1):",
+  "withdraw_address":e("usdt","💵") + " Enter your USDT TRC20 wallet address:",
   "withdraw_sent":"Request received. An administrator will process it.",
-  "profile_text":"👤 <b>Profile</b>\nID: <code>{}</code>\nWins: {}\nLosses: {}\nGames: {}\nVIP: {}\nAnonymous: {}",
-  "balance_text":"💰 Balance: ${:.2f}",
-  "language":"Choose language:",
-  "back":"Back","bad_amount":"❌ Enter a valid amount.","admin_only":"Admin only.",
+  "profile_text":e("profile","👤") + " <b>Profile</b>\n" + e("id","🆔") + " ID: <code>{}</code>\n" + e("win","🏆") + " Wins: {}\n" + e("lose","❌") + " Losses: {}\n" + e("games","🎮") + " Games: {}\n" + e("vip","⭐") + " VIP: {}\n" + e("anonymous","👤") + " Anonymous: {}",
+  "balance_text":e("balance","💰") + " Balance: ${:.2f}",
+  "language":e("info","❗") + " Choose language:",
+  "back":"⬅️ Back","bad_amount":"❌ Enter a valid amount.","admin_only":"Admin only.",
  }
 }
 
@@ -218,15 +251,16 @@ async def play(c: CallbackQuery):
     kb.button(text=t["darts"],callback_data="game_darts")
     kb.button(text=t["back"],callback_data="home")
     kb.adjust(1)
-    await c.message.edit_text(t["choose"],reply_markup=kb.as_markup())
+    await c.message.edit_text(t["choose"],reply_markup=kb.as_markup(),parse_mode="HTML")
     await c.answer()
 
 @dp.callback_query(F.data.in_({"game_dice","game_darts"}))
 async def choose_game(c: CallbackQuery,state: FSMContext):
     lang=get_lang(c.from_user.id)
-    await state.update_data(game=c.data.removeprefix("game_"))
+    data_game = c.data.removeprefix("game_")
+    await state.update_data(game=data_game)
     await state.set_state(AmountState.bet)
-    await c.message.edit_text(TEXT[lang]["bet"])
+    await c.message.edit_text((e("dice","🎲") if data_game == "dice" else e("darts","🎯")) + " " + TEXT[lang]["bet"], parse_mode="HTML")
     await c.answer()
 
 @dp.message(AmountState.bet)
@@ -314,7 +348,7 @@ async def profile(c: CallbackQuery):
 async def balance(c: CallbackQuery):
     u=get_user(c.from_user.id); t=TEXT[u["lang"]]
     await c.message.edit_text(t["balance_text"].format(float(u["balance"])),
-                              reply_markup=back_kb(u["lang"]))
+                              reply_markup=back_kb(u["lang"]), parse_mode="HTML")
     await c.answer()
 
 @dp.callback_query(F.data=="language")
@@ -323,7 +357,7 @@ async def language(c: CallbackQuery):
     for code,name in [("kz","🇰🇿 Қазақша"),("ru","🇷🇺 Русский"),("en","🇬🇧 English")]:
         kb.button(text=name,callback_data=f"setlang_{code}")
     kb.adjust(1)
-    await c.message.edit_text("Тілді таңдаңыз / Выберите язык:",reply_markup=kb.as_markup())
+    await c.message.edit_text(TEXT[get_lang(c.from_user.id)]["language"],reply_markup=kb.as_markup(),parse_mode="HTML")
     await c.answer()
 
 @dp.callback_query(F.data.startswith("setlang_"))
@@ -341,7 +375,7 @@ async def set_language(c: CallbackQuery):
 async def deposit_start(c: CallbackQuery,state: FSMContext):
     lang=get_lang(c.from_user.id)
     await state.set_state(AmountState.deposit)
-    await c.message.edit_text(TEXT[lang]["deposit_amount"])
+    await c.message.edit_text(TEXT[lang]["deposit_amount"], parse_mode="HTML")
     await c.answer()
 
 @dp.message(AmountState.deposit)
@@ -363,7 +397,7 @@ async def make_invoice(message: Message,state: FSMContext):
                     (order_id,message.from_user.id,amount))
     kb=InlineKeyboardBuilder()
     kb.row(InlineKeyboardButton(text=TEXT[lang]["pay"],url=invoice.pay_url))
-    await message.answer(TEXT[lang]["created"].format(amount),reply_markup=kb.as_markup())
+    await message.answer(TEXT[lang]["created"].format(amount),reply_markup=kb.as_markup(),parse_mode="HTML")
     await state.clear()
 
 # The FastAPI integration verifies the HMAC signature and exposes POST /lavepay.
@@ -388,7 +422,7 @@ async def on_invoice_paid(invoice):
         user=cur.fetchone()
     try:
         await bot.send_message(payment["user_id"],
-            TEXT[user["lang"]]["paid"].format(float(user["balance"])))
+            TEXT[user["lang"]]["paid"].format(float(user["balance"])), parse_mode="HTML")
     except Exception as exc:
         print("Telegram notify error:",repr(exc))
 
@@ -397,7 +431,7 @@ async def on_invoice_paid(invoice):
 async def withdraw_start(c: CallbackQuery,state: FSMContext):
     lang=get_lang(c.from_user.id)
     await state.set_state(AmountState.withdraw)
-    await c.message.edit_text(TEXT[lang]["withdraw_amount"])
+    await c.message.edit_text(TEXT[lang]["withdraw_amount"], parse_mode="HTML")
     await c.answer()
 
 @dp.message(AmountState.withdraw)
@@ -413,7 +447,7 @@ async def withdraw_amount(message: Message,state: FSMContext):
         await message.answer(TEXT[lang]["no_money"]); await state.clear(); return
     await state.update_data(withdraw_amount=str(amount))
     await state.set_state(AmountState.address)
-    await message.answer(TEXT[lang]["withdraw_address"])
+    await message.answer(TEXT[lang]["withdraw_address"], parse_mode="HTML")
 
 @dp.message(AmountState.address)
 async def withdraw_address(message: Message,state: FSMContext):
@@ -448,7 +482,7 @@ async def admin_cmd(message: Message):
         users,total=cur.fetchone()
         cur.execute("SELECT COUNT(*) FROM withdrawals WHERE status='pending'")
         pending=cur.fetchone()[0]
-    await message.answer(f"Admin panel\nUsers: {users}\nUser balances total: ${total}\nPending withdrawals: {pending}")
+    await message.answer(e("admin","🛡️") + f" Admin panel\nUsers: {users}\nUser balances total: ${total}\nPending withdrawals: {pending}", parse_mode="HTML")
 
 @app.get("/")
 async def health():
