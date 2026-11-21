@@ -7,7 +7,7 @@ from decimal import Decimal
 import psycopg2
 import psycopg2.extras
 from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery
 from aiogram.filters import CommandStart
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
@@ -29,14 +29,21 @@ EMOJI_WALLET = "5420271804411292547"      # Пополнить / Вывод
 EMOJI_BALANCE = "5992085874546844207"     # Баланс
 EMOJI_CRYPTO = "5940552778165264297"      # Крипто / Блекджек
 EMOJI_PLAY = "5766994197705921104"        # Ойын / Басты мәзір
-EMOJI_DICE = "5402282535755461614"        # Кости (тек мәтінде)
-EMOJI_DARTS = "5400331881868698012"       # Дартс (тек мәтінде)
+EMOJI_DICE = "5402282535755461614"        # Кости
+EMOJI_DARTS = "5400331881868698012"       # Дартс
 EMOJI_PROFILE = "6032693626394382504"     # Профиль
 EMOJI_VIP = "5251422397893989847"         # VIP
 EMOJI_WIN = "5449683594425410231"         # Win (Жеңіс)
 EMOJI_LOSE = "5447183459602669338"        # Lose (Жеңіліс)
 EMOJI_BACK = "5240241223632954241"        # Артқа
 EMOJI_INFO = "5274099962655816924"        # Ақпарат
+
+# Жаңа эмодзилер (Сіз жіберген)
+EMOJI_USDT = "5409048419211682843"
+EMOJI_RUB = "5231449120635370684"
+EMOJI_KZT = "5364045318092504570"
+EMOJI_ID = "5291913773307667021"
+EMOJI_GAMES = "5282843764451195532"
 
 # Бот комиссиясы (5%)
 COMMISSION_PERCENT = Decimal("0.05")
@@ -155,113 +162,113 @@ class WithdrawState(StatesGroup):
 class LobbyState(StatesGroup):
     bet_amount = State()
 
-# ================= ТІЛДЕР (Мәтіндерде премиум, батырмаларда жоқ) =================
+# ================= ТІЛДЕР =================
 TEXTS = {
     "kz": {
-        "welcome": f'Сәлем! **Duel Games**!\n\n<tg-emoji emoji-id="{EMOJI_BALANCE}">💵</tg-emoji> Балансыңыз: **${{:.2f}}**\n\nНе істейміз?',
+        "welcome": f'Сәлем! <b>Duel Games</b>!\n\n<tg-emoji emoji-id="{EMOJI_BALANCE}">💵</tg-emoji> Балансыңыз: <b>${{:.2f}}</b>\n\nНе істейміз?',
         "btn_play": "Ойын ойнау",
         "btn_profile": "Профиль",
         "btn_balance": "Баланс",
         "btn_lang": "Тіл",
         "lang_select": f'<tg-emoji emoji-id="{EMOJI_INFO}">🌐</tg-emoji> Тілді таңдаңыз:',
-        "profile_text": f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> **Профиль**\n\n🆔 ID: `{{}}`\n<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> Жеңістер: {{}}\n<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Жеңілістер: {{}}\n🎮 Ойындар: {{}}',
-        "balance_text": f'<tg-emoji emoji-id="{EMOJI_BALANCE}">💰</tg-emoji> **Балансыңыз:**\n\n💵 USD: **${{:.2f}}**\n🇰🇿 KZT: **{{:.2f}} ₸**\n🇷🇺 RUB: **{{:.2f}} ₽**\n\n(Бағам: 1 USD = 450 KZT = 90 RUB)',
+        "profile_text": f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> <b>Профиль</b>\n\n<tg-emoji emoji-id="{EMOJI_ID}">🆔</tg-emoji> ID: <code>{{}}</code>\n<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> Жеңістер: {{}}\n<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Жеңілістер: {{}}\n<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> Ойындар: {{}}',
+        "balance_text": f'<tg-emoji emoji-id="{EMOJI_BALANCE}">💰</tg-emoji> <b>Балансыңыз:</b>\n\n<tg-emoji emoji-id="{EMOJI_USDT}">💵</tg-emoji> USD: <b>${{:.2f}}</b>\n<tg-emoji emoji-id="{EMOJI_KZT}">🇰🇿</tg-emoji> KZT: <b>{{:.2f}} ₸</b>\n<tg-emoji emoji-id="{EMOJI_RUB}">🇷🇺</tg-emoji> RUB: <b>{{:.2f}} ₽</b>\n\n(Бағам: 1 USD = 450 KZT = 90 RUB)',
         "choose_game": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> Қай ойынды ойнаймыз?',
         "btn_dice_lobby": "Кости Дуэль",
         "btn_darts_lobby": "Дартс Дуэль",
         "btn_bj_lobby": "Блекджек",
-        "enter_bet": f'<tg-emoji emoji-id="{EMOJI_INFO}">💵</tg-emoji> **Ставканы енгізіңіз** (USD):\n\nМысалы: 1, 5, 10...',
-        "lobby_created": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Лобби құрылды!**\n\nЛобби ID: `{{}}`\nОйын: {{}}\nСтавка: **${{}}**\n\nДостарыңызды шақырыңыз:\n`https://t.me/{{bot_username}}?start=lobby_{{lobby_id}}`',
-        "lobby_joined": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> Сіз лоббиге қосылдыңыз! Лобби ID: `{{}}`\n\nОйын басталуын күтіңіз...',
+        "enter_bet": f'<tg-emoji emoji-id="{EMOJI_INFO}">💵</tg-emoji> <b>Ставканы енгізіңіз</b> (USD):\n\nМысалы: 1, 5, 10...',
+        "lobby_created": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Лобби құрылды!</b>\n\nЛобби ID: <code>{{}}</code>\nОйын: {{}}\nСтавка: <b>${{}}</b>\n\nДостарыңызды шақырыңыз:\n<code>https://t.me/{{bot_username}}?start=lobby_{{lobby_id}}</code>',
+        "lobby_joined": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> Сіз лоббиге қосылдыңыз! Лобби ID: <code>{{}}</code>\n\nОйын басталуын күтіңіз...',
         "lobby_not_found": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Мұндай лобби табылмады.',
         "lobby_full": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Лобби толы!',
-        "lobby_started": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> **Ойын басталды!**\n\nЛобби: {{}}',
+        "lobby_started": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> <b>Ойын басталды!</b>\n\nЛобби: {{}}',
         "no_money": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Балансыңыз жеткіліксіз!',
-        "win_bet": f'<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> **Сіз жеңдіңіз!**\n\nБанк: **${{}}**\nКомиссия: -${{}}\nҚолыңызға тиді: **+${{}}**',
-        "lose_bet": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> **Сіз жеңілдіңіз.**\n\nСтавка: **-${{}}**',
-        "draw": f'<tg-emoji emoji-id="{EMOJI_INFO}">🤝</tg-emoji> **Тең ойын!** Ставка қайтарылды.',
-        "deposit_enter": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> **Толтыру**\n\nСоманы енгізіңіз (USD):',
-        "deposit_invoice": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> **Төлем: ${{}}**\n\nТөлеу үшін басыңыз:',
-        "deposit_paid": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Төлем қабылданды!**\n\nБалансыңыз: **${{:.2f}}**',
-        "withdraw_enter_amount": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💸</tg-emoji> **Ақша шығару**\n\nБалансыңыз: **${{:.2f}}**\n\nЕң аз сома: $1.00\nКомиссия: 5%\n\nШығарғыңыз келетін соманы енгізіңіз:',
-        "withdraw_enter_address": f'<tg-emoji emoji-id="{EMOJI_INFO}">📍</tg-emoji> **Әмиян мекенжайын енгізіңіз** (USDT TRC20):',
+        "win_bet": f'<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> <b>Сіз жеңдіңіз!</b>\n\nБанк: <b>${{}}</b>\nКомиссия: -${{}}\nҚолыңызға тиді: <b>+${{}}</b>',
+        "lose_bet": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> <b>Сіз жеңілдіңіз.</b>\n\nСтавка: <b>-${{}}</b>',
+        "draw": f'<tg-emoji emoji-id="{EMOJI_INFO}">🤝</tg-emoji> <b>Тең ойын!</b> Ставка қайтарылды.',
+        "deposit_enter": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> <b>Толтыру</b>\n\nСоманы енгізіңіз (USD):',
+        "deposit_invoice": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> <b>Төлем: ${{}}</b>\n\nТөлеу үшін басыңыз:',
+        "deposit_paid": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Төлем қабылданды!</b>\n\nБалансыңыз: <b>${{:.2f}}</b>',
+        "withdraw_enter_amount": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💸</tg-emoji> <b>Ақша шығару</b>\n\nБалансыңыз: <b>${{:.2f}}</b>\n\nЕң аз сома: $1.00\nКомиссия: 5%\n\nШығарғыңыз келетін соманы енгізіңіз:',
+        "withdraw_enter_address": f'<tg-emoji emoji-id="{EMOJI_INFO}">📍</tg-emoji> <b>Әмиян мекенжайын енгізіңіз</b> (USDT TRC20):',
         "withdraw_error_min": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Ең аз сома $1.00.',
         "withdraw_error_bal": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Балансыңыз жеткіліксіз!',
         "withdraw_error_addr": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Қате әмиян мекенжайы. Қайталап көріңіз.',
-        "withdraw_success": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Өтінім қабылданды!**\n\nСома: **${{}}** (комиссия шегерілді)\n\nАқша 5-10 минут ішінде келеді.',
-        "withdraw_fail": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> **Қате!** Lave Pay API жауап бермеді. Кейінірек қайталап көріңіз.',
+        "withdraw_success": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Өтінім қабылданды!</b>\n\nСома: <b>${{}}</b> (комиссия шегерілді)\n\nАқша 5-10 минут ішінде келеді.',
+        "withdraw_fail": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> <b>Қате!</b> Lave Pay API жауап бермеді. Кейінірек қайталап көріңіз.',
     },
     "ru": {
-        "welcome": f'Привет! **Duel Games**!\n\n<tg-emoji emoji-id="{EMOJI_BALANCE}">💵</tg-emoji> Баланс: **${{:.2f}}**\n\nЧто делаем?',
+        "welcome": f'Привет! <b>Duel Games</b>!\n\n<tg-emoji emoji-id="{EMOJI_BALANCE}">💵</tg-emoji> Баланс: <b>${{:.2f}}</b>\n\nЧто делаем?',
         "btn_play": "Играть",
         "btn_profile": "Профиль",
         "btn_balance": "Баланс",
         "btn_lang": "Язык",
         "lang_select": f'<tg-emoji emoji-id="{EMOJI_INFO}">🌐</tg-emoji> Выберите язык:',
-        "profile_text": f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> **Профиль**\n\n🆔 ID: `{{}}`\n<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> Победы: {{}}\n<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Поражения: {{}}\n🎮 Игры: {{}}',
-        "balance_text": f'<tg-emoji emoji-id="{EMOJI_BALANCE}">💰</tg-emoji> **Ваш баланс:**\n\n💵 USD: **${{:.2f}}**\n🇰🇿 KZT: **{{:.2f}} ₸**\n🇷🇺 RUB: **{{:.2f}} ₽**\n\n(Курс: 1 USD = 450 KZT = 90 RUB)',
+        "profile_text": f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> <b>Профиль</b>\n\n<tg-emoji emoji-id="{EMOJI_ID}">🆔</tg-emoji> ID: <code>{{}}</code>\n<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> Победы: {{}}\n<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Поражения: {{}}\n<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> Игры: {{}}',
+        "balance_text": f'<tg-emoji emoji-id="{EMOJI_BALANCE}">💰</tg-emoji> <b>Ваш баланс:</b>\n\n<tg-emoji emoji-id="{EMOJI_USDT}">💵</tg-emoji> USD: <b>${{:.2f}}</b>\n<tg-emoji emoji-id="{EMOJI_KZT}">🇰🇿</tg-emoji> KZT: <b>{{:.2f}} ₸</b>\n<tg-emoji emoji-id="{EMOJI_RUB}">🇷🇺</tg-emoji> RUB: <b>{{:.2f}} ₽</b>\n\n(Курс: 1 USD = 450 KZT = 90 RUB)',
         "choose_game": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> Какую игру выберем?',
         "btn_dice_lobby": "Дуэль на костях",
         "btn_darts_lobby": "Дуэль в дартс",
         "btn_bj_lobby": "Блэкджек",
-        "enter_bet": f'<tg-emoji emoji-id="{EMOJI_INFO}">💵</tg-emoji> **Введите ставку** (USD):\n\nНапример: 1, 5, 10...',
-        "lobby_created": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Лобби создано!**\n\nID лобби: `{{}}`\nИгра: {{}}\nСтавка: **${{}}**\n\nОтправьте этот ID друзьям:\n`https://t.me/{{bot_username}}?start=lobby_{{lobby_id}}`',
-        "lobby_joined": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> Вы присоединились к лобби! ID: `{{}}`\n\nОжидайте начала игры...',
+        "enter_bet": f'<tg-emoji emoji-id="{EMOJI_INFO}">💵</tg-emoji> <b>Введите ставку</b> (USD):\n\nНапример: 1, 5, 10...',
+        "lobby_created": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Лобби создано!</b>\n\nID лобби: <code>{{}}</code>\nИгра: {{}}\nСтавка: <b>${{}}</b>\n\nОтправьте этот ID друзьям:\n<code>https://t.me/{{bot_username}}?start=lobby_{{lobby_id}}</code>',
+        "lobby_joined": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> Вы присоединились к лобби! ID: <code>{{}}</code>\n\nОжидайте начала игры...',
         "lobby_not_found": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Лобби не найдено.',
         "lobby_full": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Лобби заполнено!',
-        "lobby_started": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> **Игра началась!**\n\nЛобби: {{}}',
+        "lobby_started": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> <b>Игра началась!</b>\n\nЛобби: {{}}',
         "no_money": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Недостаточно средств!',
-        "win_bet": f'<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> **Вы победили!**\n\nБанк: **${{}}**\nКомиссия: -${{}}\nВаш выигрыш: **+${{}}**',
-        "lose_bet": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> **Вы проиграли.**\n\nСтавка: **-${{}}**',
-        "draw": f'<tg-emoji emoji-id="{EMOJI_INFO}">🤝</tg-emoji> **Ничья!** Ставка возвращена.',
-        "deposit_enter": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> **Пополнение**\n\nВведите сумму (USD):',
-        "deposit_invoice": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> **К оплате: ${{}}**',
-        "deposit_paid": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Платеж получен!**\n\nБаланс: **${{:.2f}}**',
-        "withdraw_enter_amount": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💸</tg-emoji> **Вывод средств**\n\nБаланс: **${{:.2f}}**\n\nМин. сумма: $1.00\nКомиссия: 5%\n\nВведите сумму для вывода:',
-        "withdraw_enter_address": f'<tg-emoji emoji-id="{EMOJI_INFO}">📍</tg-emoji> **Введите адрес кошелька** (USDT TRC20):',
+        "win_bet": f'<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> <b>Вы победили!</b>\n\nБанк: <b>${{}}</b>\nКомиссия: -${{}}\nВаш выигрыш: <b>+${{}}</b>',
+        "lose_bet": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> <b>Вы проиграли.</b>\n\nСтавка: <b>-${{}}</b>',
+        "draw": f'<tg-emoji emoji-id="{EMOJI_INFO}">🤝</tg-emoji> <b>Ничья!</b> Ставка возвращена.',
+        "deposit_enter": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> <b>Пополнение</b>\n\nВведите сумму (USD):',
+        "deposit_invoice": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> <b>К оплате: ${{}}</b>',
+        "deposit_paid": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Платеж получен!</b>\n\nБаланс: <b>${{:.2f}}</b>',
+        "withdraw_enter_amount": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💸</tg-emoji> <b>Вывод средств</b>\n\nБаланс: <b>${{:.2f}}</b>\n\nМин. сумма: $1.00\nКомиссия: 5%\n\nВведите сумму для вывода:',
+        "withdraw_enter_address": f'<tg-emoji emoji-id="{EMOJI_INFO}">📍</tg-emoji> <b>Введите адрес кошелька</b> (USDT TRC20):',
         "withdraw_error_min": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Минимальная сумма $1.00.',
         "withdraw_error_bal": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Недостаточно средств!',
         "withdraw_error_addr": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Неверный адрес кошелька. Попробуйте снова.',
-        "withdraw_success": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Заявка принята!**\n\nСумма: **${{}}** (с учетом комиссии)\n\nСредства придут в течение 5-10 минут.',
-        "withdraw_fail": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> **Ошибка!** Lave Pay API не ответил. Попробуйте позже.',
+        "withdraw_success": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Заявка принята!</b>\n\nСумма: <b>${{}}</b> (с учетом комиссии)\n\nСредства придут в течение 5-10 минут.',
+        "withdraw_fail": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> <b>Ошибка!</b> Lave Pay API не ответил. Попробуйте позже.',
     },
     "en": {
-        "welcome": f'Hello! **Duel Games**!\n\n<tg-emoji emoji-id="{EMOJI_BALANCE}">💵</tg-emoji> Balance: **${{:.2f}}**\n\nWhat to do?',
+        "welcome": f'Hello! <b>Duel Games</b>!\n\n<tg-emoji emoji-id="{EMOJI_BALANCE}">💵</tg-emoji> Balance: <b>${{:.2f}}</b>\n\nWhat to do?',
         "btn_play": "Play",
         "btn_profile": "Profile",
         "btn_balance": "Balance",
         "btn_lang": "Language",
         "lang_select": f'<tg-emoji emoji-id="{EMOJI_INFO}">🌐</tg-emoji> Choose language:',
-        "profile_text": f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> **Profile**\n\n🆔 ID: `{{}}`\n<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> Wins: {{}}\n<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Losses: {{}}\n🎮 Games: {{}}',
-        "balance_text": f'<tg-emoji emoji-id="{EMOJI_BALANCE}">💰</tg-emoji> **Your balance:**\n\n💵 USD: **${{:.2f}}**\n🇰🇿 KZT: **{{:.2f}} ₸**\n🇷🇺 RUB: **{{:.2f}} ₽**\n\n(Rate: 1 USD = 450 KZT = 90 RUB)',
+        "profile_text": f'<tg-emoji emoji-id="{EMOJI_PROFILE}">👤</tg-emoji> <b>Profile</b>\n\n<tg-emoji emoji-id="{EMOJI_ID}">🆔</tg-emoji> ID: <code>{{}}</code>\n<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> Wins: {{}}\n<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Losses: {{}}\n<tg-emoji emoji-id="{EMOJI_GAMES}">🎮</tg-emoji> Games: {{}}',
+        "balance_text": f'<tg-emoji emoji-id="{EMOJI_BALANCE}">💰</tg-emoji> <b>Your balance:</b>\n\n<tg-emoji emoji-id="{EMOJI_USDT}">💵</tg-emoji> USD: <b>${{:.2f}}</b>\n<tg-emoji emoji-id="{EMOJI_KZT}">🇰🇿</tg-emoji> KZT: <b>{{:.2f}} ₸</b>\n<tg-emoji emoji-id="{EMOJI_RUB}">🇷🇺</tg-emoji> RUB: <b>{{:.2f}} ₽</b>\n\n(Rate: 1 USD = 450 KZT = 90 RUB)',
         "choose_game": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> Which game to play?',
         "btn_dice_lobby": "Dice Duel",
         "btn_darts_lobby": "Darts Duel",
         "btn_bj_lobby": "Blackjack",
-        "enter_bet": f'<tg-emoji emoji-id="{EMOJI_INFO}">💵</tg-emoji> **Enter bet amount** (USD):\n\nExample: 1, 5, 10...',
-        "lobby_created": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Lobby created!**\n\nLobby ID: `{{}}`\nGame: {{}}\nBet: **${{}}**\n\nShare this ID with friends:\n`https://t.me/{{bot_username}}?start=lobby_{{lobby_id}}`',
-        "lobby_joined": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> You joined the lobby! ID: `{{}}`\n\nWaiting for the game to start...',
+        "enter_bet": f'<tg-emoji emoji-id="{EMOJI_INFO}">💵</tg-emoji> <b>Enter bet amount</b> (USD):\n\nExample: 1, 5, 10...',
+        "lobby_created": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Lobby created!</b>\n\nLobby ID: <code>{{}}</code>\nGame: {{}}\nBet: <b>${{}}</b>\n\nShare this ID with friends:\n<code>https://t.me/{{bot_username}}?start=lobby_{{lobby_id}}</code>',
+        "lobby_joined": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> You joined the lobby! ID: <code>{{}}</code>\n\nWaiting for the game to start...',
         "lobby_not_found": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Lobby not found.',
         "lobby_full": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Lobby is full!',
-        "lobby_started": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> **Game started!**\n\nLobby: {{}}',
+        "lobby_started": f'<tg-emoji emoji-id="{EMOJI_PLAY}">🎮</tg-emoji> <b>Game started!</b>\n\nLobby: {{}}',
         "no_money": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Insufficient balance!',
-        "win_bet": f'<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> **You won!**\n\nBank: **${{}}**\nFee: -${{}}\nYour win: **+${{}}**',
-        "lose_bet": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> **You lost.**\n\nBet: **-${{}}**',
-        "draw": f'<tg-emoji emoji-id="{EMOJI_INFO}">🤝</tg-emoji> **Draw!** Bet returned.',
-        "deposit_enter": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> **Deposit**\n\nEnter amount (USD):',
-        "deposit_invoice": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> **Amount: ${{}}**',
-        "deposit_paid": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Payment received!**\n\nBalance: **${{:.2f}}**',
-        "withdraw_enter_amount": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💸</tg-emoji> **Withdraw**\n\nBalance: **${{:.2f}}**\n\nMin: $1.00\nFee: 5%\n\nEnter amount to withdraw:',
-        "withdraw_enter_address": f'<tg-emoji emoji-id="{EMOJI_INFO}">📍</tg-emoji> **Enter your wallet address** (USDT TRC20):',
+        "win_bet": f'<tg-emoji emoji-id="{EMOJI_WIN}">🏆</tg-emoji> <b>You won!</b>\n\nBank: <b>${{}}</b>\nFee: -${{}}\nYour win: <b>+${{}}</b>',
+        "lose_bet": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> <b>You lost.</b>\n\nBet: <b>-${{}}</b>',
+        "draw": f'<tg-emoji emoji-id="{EMOJI_INFO}">🤝</tg-emoji> <b>Draw!</b> Bet returned.',
+        "deposit_enter": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> <b>Deposit</b>\n\nEnter amount (USD):',
+        "deposit_invoice": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💳</tg-emoji> <b>Amount: ${{}}</b>',
+        "deposit_paid": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Payment received!</b>\n\nBalance: <b>${{:.2f}}</b>',
+        "withdraw_enter_amount": f'<tg-emoji emoji-id="{EMOJI_WALLET}">💸</tg-emoji> <b>Withdraw</b>\n\nBalance: <b>${{:.2f}}</b>\n\nMin: $1.00\nFee: 5%\n\nEnter amount to withdraw:',
+        "withdraw_enter_address": f'<tg-emoji emoji-id="{EMOJI_INFO}">📍</tg-emoji> <b>Enter your wallet address</b> (USDT TRC20):',
         "withdraw_error_min": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Minimum is $1.00.',
         "withdraw_error_bal": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Insufficient balance!',
         "withdraw_error_addr": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> Invalid wallet address. Try again.',
-        "withdraw_success": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> **Request accepted!**\n\nAmount: **${{}}** (after fee)\n\nFunds will arrive in 5-10 mins.',
-        "withdraw_fail": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> **Error!** Lave Pay API did not respond. Try again later.',
+        "withdraw_success": f'<tg-emoji emoji-id="{EMOJI_WIN}">✅</tg-emoji> <b>Request accepted!</b>\n\nAmount: <b>${{}}</b> (after fee)\n\nFunds will arrive in 5-10 mins.',
+        "withdraw_fail": f'<tg-emoji emoji-id="{EMOJI_LOSE}">❌</tg-emoji> <b>Error!</b> Lave Pay API did not respond. Try again later.',
     }
 }
 
-# ================= КЛАВИАТУРАЛАР (icon_custom_emoji_id арқылы) =================
+# ================= КЛАВИАТУРАЛАР =================
 def lang_kb():
     kb = InlineKeyboardBuilder()
     kb.button(text="🇰🇿 Қазақша", callback_data="lang_kz")
@@ -272,7 +279,6 @@ def lang_kb():
 
 def main_menu_kb(lang):
     kb = InlineKeyboardBuilder()
-    # Батырма мәтінінде эмодзи ЖОҚ, тек icon_custom_emoji_id
     kb.button(text=TEXTS[lang]["btn_play"], callback_data="play_menu", icon_custom_emoji_id=EMOJI_PLAY)
     kb.button(text=TEXTS[lang]["btn_profile"], callback_data="profile", icon_custom_emoji_id=EMOJI_PROFILE)
     kb.button(text=TEXTS[lang]["btn_balance"], callback_data="balance", icon_custom_emoji_id=EMOJI_BALANCE)
@@ -282,7 +288,6 @@ def main_menu_kb(lang):
 
 def games_kb(lang):
     kb = InlineKeyboardBuilder()
-    # Батырма мәтінінде эмодзи ЖОҚ, тек icon_custom_emoji_id
     kb.button(text=TEXTS[lang]["btn_dice_lobby"], callback_data="create_lobby_dice", icon_custom_emoji_id=EMOJI_DICE)
     kb.button(text=TEXTS[lang]["btn_darts_lobby"], callback_data="create_lobby_darts", icon_custom_emoji_id=EMOJI_DARTS)
     kb.button(text=TEXTS[lang]["btn_bj_lobby"], callback_data="create_lobby_bj", icon_custom_emoji_id=EMOJI_CRYPTO)
@@ -494,8 +499,6 @@ async def play_darts_duel(p1, p2):
         return p2
     else:
         return None
-
-# ... (Профиль, Баланс, Пополнение, Вывод хэндлерлері сол қалпында)
 
 @dp.callback_query(F.data == "profile")
 async def profile(call: CallbackQuery):
