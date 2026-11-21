@@ -185,7 +185,9 @@ class AmountState(StatesGroup):
     withdraw = State()
     address = State()
     lobby_bet = State()
-    TEXT = {
+
+
+TEXT = {
     "kz": {
         "welcome": "Сәлем! <b>Duel Games</b>!\n\n" + e("wallet") + " Балансыңыз: <b>${:.2f}</b>\n\nНе істейміз?",
         "play": "Ойын ойнау",
@@ -310,7 +312,9 @@ class AmountState(StatesGroup):
         "lobby_join_btn": "Join lobby",
     },
 }
-    def main_kb(uid, lang):
+
+
+def main_kb(uid, lang):
     t = TEXT[lang]
     kb = InlineKeyboardBuilder()
     kb.button(text=t["play"], callback_data="play",
@@ -494,7 +498,9 @@ async def set_language(c: CallbackQuery):
         parse_mode="HTML"
     )
     await c.answer()
-    @dp.callback_query(F.data == "play")
+
+
+@dp.callback_query(F.data == "play")
 async def play(c: CallbackQuery):
     t = TEXT[get_lang(c.from_user.id)]
     kb = InlineKeyboardBuilder()
@@ -902,7 +908,9 @@ async def withdraw_address(message: Message, state: FSMContext):
             f"Address: {address}"
         )
     await state.clear()
-    @dp.message(Command("admin"))
+
+
+@dp.message(Command("admin"))
 async def admin_cmd(message: Message):
     if not is_admin(message.from_user.id):
         await message.answer(TEXT[get_lang(message.from_user.id)]["admin_only"])
