@@ -8,7 +8,7 @@ import psycopg2
 import psycopg2.extras
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -33,45 +33,30 @@ lp = LavePay(LAVEPAY_API_KEY, webhook_secret=LAVEPAY_WEBHOOK_SECRET)
 app = FastAPI(title="Duel Games LavePay webhook")
 
 EMOJI_IDS = {
-    "wallet": "5420271804411292547",
-    "balance": "5992085874546844207",
-    "crypto": "5940552778165264297",
-    "play": "5766994197705921104",
-    "dice": "5402282535755461614",
-    "darts": "5400331881868698012",
-    "profile": "6032693626394382504",
-    "vip": "5251422397893989847",
-    "win": "5449683594425410231",
-    "lose": "5447183459602669338",
-    "back": "5240241223632954241",
-    "info": "5274099962655816924",
-    "admin": "5274099962655816924",
-    "usdt": "5409048419211682843",
-    "rub": "5231449120635370684",
-    "kzt": "5364045318092504570",
-    "id": "5291913773307667021",
-    "games": "5282843764451195532",
-    "anonymous": "5251422397893989847",
-    "lobby": "5282843764451195532",
-    "search": "5420271804411292547",
-    "join": "5449683594425410231",
+    "wallet": "5420271804411292547", "balance": "5992085874546844207",
+    "crypto": "5940552778165264297", "play": "5766994197705921104",
+    "dice": "5402282535755461614", "darts": "5400331881868698012",
+    "profile": "6032693626394382504", "vip": "5251422397893989847",
+    "win": "5449683594425410231", "lose": "5447183459602669338",
+    "back": "5240241223632954241", "info": "5274099962655816924",
+    "admin": "5274099962655816924", "usdt": "5409048419211682843",
+    "id": "5291913773307667021", "games": "5282843764451195532",
+    "anonymous": "5251422397893989847", "lobby": "5282843764451195532",
+    "search": "5420271804411292547", "join": "5449683594425410231",
 }
 
 EMOJI_FALLBACK = {
     "wallet": "💰", "balance": "💵", "crypto": "💳", "play": "🎮",
     "dice": "🎲", "darts": "🎯", "profile": "👤", "vip": "👑",
     "win": "🏆", "lose": "❌", "back": "⬅️", "info": "ℹ️",
-    "admin": "🛡️", "usdt": "💵", "rub": "💴", "kzt": "💸",
-    "id": "🆔", "games": "🎮", "anonymous": "👤",
-    "lobby": "🎮", "search": "🔍", "join": "✅",
+    "admin": "🛡️", "usdt": "💵", "id": "🆔", "games": "🎮",
+    "anonymous": "👤", "lobby": "🎮", "search": "🔍", "join": "✅",
 }
-
 
 def e(key):
     emoji = EMOJI_FALLBACK.get(key, "⭐")
-    emoji_id = EMOJI_IDS[key]
+    emoji_id = EMOJI_IDS.get(key, "5274099962655816924")
     return f'<tg-emoji emoji-id="{emoji_id}">{emoji}</tg-emoji>'
-
 
 @contextmanager
 def db():
@@ -82,103 +67,76 @@ def db():
     finally:
         conn.close()
 
-
 def init_db():
     with db() as conn, conn.cursor() as cur:
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
-            balance NUMERIC(18,2) NOT NULL DEFAULT 0,
-            wins INTEGER NOT NULL DEFAULT 0,
-            losses INTEGER NOT NULL DEFAULT 0,
-            games INTEGER NOT NULL DEFAULT 0,
-            lang TEXT NOT NULL DEFAULT 'kz',
-            is_vip BOOLEAN NOT NULL DEFAULT FALSE,
-            is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
-            referrer_id BIGINT,
-            has_deposited BOOLEAN NOT NULL DEFAULT FALSE
+            user_id BIGINT PRIMARY KEY, balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0,
+            games INTEGER NOT NULL DEFAULT 0, lang TEXT NOT NULL DEFAULT 'kz',
+            is_vip BOOLEAN NOT NULL DEFAULT FALSE, is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
+            referrer_id BIGINT, has_deposited BOOLEAN NOT NULL DEFAULT FALSE
         )""")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS payments (
-            order_id TEXT PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-            paid_at TIMESTAMP
+            order_id TEXT PRIMARY KEY, user_id BIGINT NOT NULL,
+            amount NUMERIC(18,2) NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(), paid_at TIMESTAMP
         )""")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS withdrawals (
-            id BIGSERIAL PRIMARY KEY,
-            user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL,
-            address TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending',
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL,
+            amount NUMERIC(18,2) NOT NULL, address TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobbies (
-            lobby_id TEXT PRIMARY KEY,
-            host_id BIGINT NOT NULL,
-            chat_id BIGINT NOT NULL,
-            game_type TEXT NOT NULL,
-            bet_amount NUMERIC(18,2) NOT NULL,
-            status TEXT NOT NULL DEFAULT 'waiting',
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            lobby_id TEXT PRIMARY KEY, host_id BIGINT NOT NULL, chat_id BIGINT NOT NULL,
+            game_type TEXT NOT NULL, bet_amount NUMERIC(18,2) NOT NULL,
+            status TEXT NOT NULL DEFAULT 'waiting', created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobby_players (
             lobby_id TEXT REFERENCES lobbies(lobby_id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL,
-            PRIMARY KEY(lobby_id, user_id)
+            user_id BIGINT NOT NULL, PRIMARY KEY(lobby_id, user_id)
         )""")
-
 
 def ensure_user(uid):
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO users(user_id) VALUES(%s) ON CONFLICT DO NOTHING",
-            (uid,)
-        )
-
+        cur.execute("INSERT INTO users(user_id) VALUES(%s) ON CONFLICT DO NOTHING", (uid,))
 
 def get_user(uid):
-    with db() as conn, conn.cursor(
-        cursor_factory=psycopg2.extras.DictCursor
-    ) as cur:
+    with db() as conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
         cur.execute("SELECT * FROM users WHERE user_id=%s", (uid,))
         row = cur.fetchone()
-        if row:
-            return row
+        if row: return row
     ensure_user(uid)
-    with db() as conn, conn.cursor(
-        cursor_factory=psycopg2.extras.DictCursor
-    ) as cur:
+    with db() as conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
         cur.execute("SELECT * FROM users WHERE user_id=%s", (uid,))
         return cur.fetchone()
 
-
 def get_lang(uid):
-    return get_user(uid)["lang"] or "kz"
-
+    try:
+        return get_user(uid)["lang"] or "kz"
+    except:
+        return "kz"
 
 def money(value):
     return Decimal(str(value)).quantize(Decimal("0.01"))
 
-
-async def get_referral_data(uid):
-    with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT COUNT(*) FROM users WHERE referrer_id=%s", (uid,)
-        )
-        count = cur.fetchone()[0]
-    me = await bot.get_me()
-    return count, f"https://t.me/{me.username}?start=ref_{uid}"
-
-
 def is_admin(uid):
     return ADMIN_ID != 0 and uid == ADMIN_ID
 
+async def get_referral_data(uid):
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT COUNT(*) FROM users WHERE referrer_id=%s", (uid,))
+        count = cur.fetchone()[0]
+    try:
+        me = await bot.get_me()
+        username = me.username
+    except:
+        username = "DuelGamesBot"
+    return count, f"https://t.me/{username}?start=ref_{uid}"
 
 class AmountState(StatesGroup):
     deposit = State()
@@ -186,27 +144,16 @@ class AmountState(StatesGroup):
     address = State()
     lobby_bet = State()
 
-
 TEXT = {
     "kz": {
         "welcome": "Сәлем! <b>Duel Games</b>!\n\n" + e("wallet") + " Балансыңыз: <b>${:.2f}</b>\n\nНе істейміз?",
-        "play": "Ойын ойнау",
-        "profile": "Профиль",
-        "balance": "Баланс",
-        "rating": "Рейтинг",
-        "referrals": "Реферал",
-        "deposit": "Пополнить",
-        "withdraw": "Вывод",
-        "lang": "Тіл",
-        "admin_btn": "Админ панель",
-        "choose": e("play") + " Ойынды таңдаңыз:",
-        "dice": "Кости дуэль",
-        "darts": "Дартс дуэль",
-        "bet": "Ставканы енгізіңіз (USD):",
-        "no_money": "Балансыңыз жеткіліксіз!",
+        "play": "Ойын ойнау", "profile": "Профиль", "balance": "Баланс",
+        "rating": "Рейтинг", "referrals": "Реферал", "deposit": "Пополнить",
+        "withdraw": "Вывод", "lang": "Тіл", "admin_btn": "Админ панель",
+        "choose": e("play") + " Ойынды таңдаңыз:", "dice": "Кости дуэль", "darts": "Дартс дуэль",
+        "bet": "Ставканы енгізіңіз (USD):", "no_money": "Балансыңыз жеткіліксіз!",
         "deposit_amount": e("wallet") + " Толықтырғыңыз келетін соманы USD түрінде енгізіңіз:",
-        "pay": "Төлеу",
-        "created": e("crypto") + " Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
+        "pay": "Төлеу", "created": e("crypto") + " Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
         "paid": e("wallet") + " Төлем қабылданды! Жаңа баланс: ${:.2f}",
         "withdraw_amount": e("crypto") + " Шығарылатын соманы енгізіңіз (ең азы $1):",
         "withdraw_address": e("usdt") + " USDT TRC20 әмиян мекенжайын енгізіңіз:",
@@ -215,39 +162,25 @@ TEXT = {
         "balance_text": e("balance") + " Баланс: ${:.2f}",
         "rating_text": e("games") + " <b>Рейтинг ойыншылар</b>",
         "referral_text": e("info") + " <b>Реферал жүйесі</b>\n\nДосыңды шақыр. Тіркелген реферал саны: <b>{}</b>\n\nСенің сілтемең:\n<code>{}</code>",
-        "language": e("info") + " Тілді таңдаңыз:",
-        "back": "Артқа",
-        "bad_amount": "Соманы дұрыс енгізіңіз.",
-        "admin_only": "Бұл команда тек әкімшіге арналған.",
+        "language": e("info") + " Тілді таңдаңыз:", "back": "Артқа",
+        "bad_amount": "Соманы дұрыс енгізіңіз.", "admin_only": "Бұл команда тек әкімшіге арналған.",
         "lobby_menu": e("lobby") + " <b>Лобби</b>\n\nЛобби ашыңыз немесе онлайн лобби іздеңіз:",
-        "lobby_create": "Лобби ашу",
-        "lobby_search": "Онлайн лобби іздеу",
+        "lobby_create": "Лобби ашу", "lobby_search": "Онлайн лобби іздеу",
         "lobby_created": "Лобби ашылды!\nКод: <code>{}</code>\nСтавка: ${}\nОйын: {}\n\nСілтеме: {}",
         "lobby_search_empty": "Қазір онлайн лобби жоқ. Өзіңіз ашыңыз!",
         "lobby_search_title": e("search") + " <b>Онлайн лоббилер</b>\n\nЛобби таңдаңыз:",
         "lobby_joined": "Лоббиге кірдіңіз! Ойын басталады...",
-        "lobby_not_found": "Лобби табылмады немесе толы.",
-        "lobby_join_btn": "Лоббиге кіру",
+        "lobby_not_found": "Лобби табылмады немесе толы.", "lobby_join_btn": "Лоббиге кіру",
     },
     "ru": {
         "welcome": "Привет! <b>Duel Games</b>!\n\n" + e("wallet") + " Баланс: <b>${:.2f}</b>\n\nЧто делаем?",
-        "play": "Играть",
-        "profile": "Профиль",
-        "balance": "Баланс",
-        "rating": "Рейтинг",
-        "referrals": "Рефералы",
-        "deposit": "Пополнить",
-        "withdraw": "Вывод",
-        "lang": "Язык",
-        "admin_btn": "Админ панель",
-        "choose": e("play") + " Выберите игру:",
-        "dice": "Дуэль на костях",
-        "darts": "Дуэль в дартс",
-        "bet": "Введите ставку (USD):",
-        "no_money": "Недостаточно средств!",
+        "play": "Играть", "profile": "Профиль", "balance": "Баланс",
+        "rating": "Рейтинг", "referrals": "Рефералы", "deposit": "Пополнить",
+        "withdraw": "Вывод", "lang": "Язык", "admin_btn": "Админ панель",
+        "choose": e("play") + " Выберите игру:", "dice": "Дуэль на костях", "darts": "Дуэль в дартс",
+        "bet": "Введите ставку (USD):", "no_money": "Недостаточно средств!",
         "deposit_amount": e("wallet") + " Введите сумму пополнения в USD:",
-        "pay": "Оплатить",
-        "created": e("crypto") + " Счёт создан на ${}. Нажмите кнопку оплаты.",
+        "pay": "Оплатить", "created": e("crypto") + " Счёт создан на ${}. Нажмите кнопку оплаты.",
         "paid": e("wallet") + " Платёж получен! Новый баланс: ${:.2f}",
         "withdraw_amount": e("crypto") + " Введите сумму вывода (минимум $1):",
         "withdraw_address": e("usdt") + " Введите адрес USDT TRC20:",
@@ -256,39 +189,25 @@ TEXT = {
         "balance_text": e("balance") + " Баланс: ${:.2f}",
         "rating_text": e("games") + " <b>Рейтинг игроков</b>",
         "referral_text": e("info") + " <b>Реферальная система</b>\n\nПриглашай друзей. Зарегистрировано рефералов: <b>{}</b>\n\nТвоя ссылка:\n<code>{}</code>",
-        "language": e("info") + " Выберите язык:",
-        "back": "Назад",
-        "bad_amount": "Введите корректную сумму.",
-        "admin_only": "Только для администратора.",
+        "language": e("info") + " Выберите язык:", "back": "Назад",
+        "bad_amount": "Введите корректную сумму.", "admin_only": "Только для администратора.",
         "lobby_menu": e("lobby") + " <b>Лобби</b>\n\nСоздайте лобби или найдите онлайн:",
-        "lobby_create": "Создать лобби",
-        "lobby_search": "Поиск онлайн лобби",
+        "lobby_create": "Создать лобби", "lobby_search": "Поиск онлайн лобби",
         "lobby_created": "Лобби создано!\nКод: <code>{}</code>\nСтавка: ${}\nИгра: {}\n\nСсылка: {}",
         "lobby_search_empty": "Сейчас нет онлайн лобби. Создайте своё!",
         "lobby_search_title": e("search") + " <b>Онлайн лобби</b>\n\nВыберите лобби:",
         "lobby_joined": "Вы вошли в лобби! Игра начинается...",
-        "lobby_not_found": "Лобби не найдено или заполнено.",
-        "lobby_join_btn": "Войти в лобби",
+        "lobby_not_found": "Лобби не найдено или заполнено.", "lobby_join_btn": "Войти в лобби",
     },
     "en": {
         "welcome": "Hi! <b>Duel Games</b>!\n\n" + e("wallet") + " Balance: <b>${:.2f}</b>\n\nWhat do we do?",
-        "play": "Play",
-        "profile": "Profile",
-        "balance": "Balance",
-        "rating": "Rating",
-        "referrals": "Referrals",
-        "deposit": "Deposit",
-        "withdraw": "Withdraw",
-        "lang": "Language",
-        "admin_btn": "Admin panel",
-        "choose": e("play") + " Choose a game:",
-        "dice": "Dice duel",
-        "darts": "Darts duel",
-        "bet": "Enter bet (USD):",
-        "no_money": "Insufficient balance!",
+        "play": "Play", "profile": "Profile", "balance": "Balance",
+        "rating": "Rating", "referrals": "Referrals", "deposit": "Deposit",
+        "withdraw": "Withdraw", "lang": "Language", "admin_btn": "Admin panel",
+        "choose": e("play") + " Choose a game:", "dice": "Dice duel", "darts": "Darts duel",
+        "bet": "Enter bet (USD):", "no_money": "Insufficient balance!",
         "deposit_amount": e("wallet") + " Enter deposit amount in USD:",
-        "pay": "Pay",
-        "created": e("crypto") + " Invoice created for ${}. Tap to pay.",
+        "pay": "Pay", "created": e("crypto") + " Invoice created for ${}. Tap to pay.",
         "paid": e("wallet") + " Payment received! New balance: ${:.2f}",
         "withdraw_amount": e("crypto") + " Enter withdrawal amount (minimum $1):",
         "withdraw_address": e("usdt") + " Enter your USDT TRC20 wallet address:",
@@ -297,64 +216,45 @@ TEXT = {
         "balance_text": e("balance") + " Balance: ${:.2f}",
         "rating_text": e("games") + " <b>Player leaderboard</b>",
         "referral_text": e("info") + " <b>Referral system</b>\n\nInvite friends. Registered referrals: <b>{}</b>\n\nYour link:\n<code>{}</code>",
-        "language": e("info") + " Choose language:",
-        "back": "Back",
-        "bad_amount": "Enter a valid amount.",
-        "admin_only": "Admin only.",
+        "language": e("info") + " Choose language:", "back": "Back",
+        "bad_amount": "Enter a valid amount.", "admin_only": "Admin only.",
         "lobby_menu": e("lobby") + " <b>Lobbies</b>\n\nCreate a lobby or find online:",
-        "lobby_create": "Create lobby",
-        "lobby_search": "Search online lobbies",
+        "lobby_create": "Create lobby", "lobby_search": "Search online lobbies",
         "lobby_created": "Lobby created!\nCode: <code>{}</code>\nBet: ${}\nGame: {}\n\nLink: {}",
         "lobby_search_empty": "No online lobbies right now. Create one!",
         "lobby_search_title": e("search") + " <b>Online lobbies</b>\n\nChoose a lobby:",
         "lobby_joined": "You joined the lobby! Game starts...",
-        "lobby_not_found": "Lobby not found or full.",
-        "lobby_join_btn": "Join lobby",
+        "lobby_not_found": "Lobby not found or full.", "lobby_join_btn": "Join lobby",
     },
 }
-
 
 def main_kb(uid, lang):
     t = TEXT[lang]
     kb = InlineKeyboardBuilder()
-    kb.button(text=t["play"], callback_data="play",
-              icon_custom_emoji_id=EMOJI_IDS["play"])
-    kb.button(text=t["profile"], callback_data="profile",
-              icon_custom_emoji_id=EMOJI_IDS["profile"])
-    kb.button(text=t["balance"], callback_data="balance",
-              icon_custom_emoji_id=EMOJI_IDS["balance"])
-    kb.button(text=t["referrals"], callback_data="referrals",
-              icon_custom_emoji_id=EMOJI_IDS["info"])
-    kb.button(text=t["rating"], callback_data="rating",
-              icon_custom_emoji_id=EMOJI_IDS["games"])
-    kb.button(text=t["deposit"], callback_data="deposit",
-              icon_custom_emoji_id=EMOJI_IDS["wallet"])
-    kb.button(text=t["withdraw"], callback_data="withdraw",
-              icon_custom_emoji_id=EMOJI_IDS["wallet"])
-    kb.button(text=t["lang"], callback_data="language",
-              icon_custom_emoji_id=EMOJI_IDS["info"])
+    kb.button(text=t["play"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["play"])
+    kb.button(text=t["profile"], callback_data="profile", icon_custom_emoji_id=EMOJI_IDS["profile"])
+    kb.button(text=t["balance"], callback_data="balance", icon_custom_emoji_id=EMOJI_IDS["balance"])
+    kb.button(text=t["referrals"], callback_data="referrals", icon_custom_emoji_id=EMOJI_IDS["info"])
+    kb.button(text=t["rating"], callback_data="rating", icon_custom_emoji_id=EMOJI_IDS["games"])
+    kb.button(text=t["deposit"], callback_data="deposit", icon_custom_emoji_id=EMOJI_IDS["wallet"])
+    kb.button(text=t["withdraw"], callback_data="withdraw", icon_custom_emoji_id=EMOJI_IDS["wallet"])
+    kb.button(text=t["lang"], callback_data="language", icon_custom_emoji_id=EMOJI_IDS["info"])
     if is_admin(uid):
-        kb.button(text=t["admin_btn"], callback_data="admin_home",
-                  icon_custom_emoji_id=EMOJI_IDS["admin"])
+        kb.button(text=t["admin_btn"], callback_data="admin_home", icon_custom_emoji_id=EMOJI_IDS["admin"])
         kb.adjust(4, 4, 1)
     else:
         kb.adjust(4, 4)
     return kb.as_markup()
 
-
 def back_kb(lang, data="home"):
     kb = InlineKeyboardBuilder()
-    kb.button(text=TEXT[lang]["back"], callback_data=data,
-              icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.button(text=TEXT[lang]["back"], callback_data=data, icon_custom_emoji_id=EMOJI_IDS["back"])
     return kb.as_markup()
-
 
 def profile_kb(lang):
     kb = InlineKeyboardBuilder()
-    kb.button(text=TEXT[lang]["back"], callback_data="home",
-              icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.button(text=TEXT[lang]["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
     return kb.as_markup()
-
 
 @dp.message(CommandStart())
 async def start(message: Message):
@@ -376,8 +276,7 @@ async def start(message: Message):
             except (ValueError, TypeError):
                 pass
         elif args[1].startswith("lobby_"):
-            await try_join_lobby(message, message.from_user.id,
-                                 args[1][6:].upper())
+            await try_join_lobby(message, message.from_user.id, args[1][6:].upper())
             return
 
     await message.answer(
@@ -385,7 +284,6 @@ async def start(message: Message):
         reply_markup=main_kb(message.from_user.id, u["lang"]),
         parse_mode="HTML"
     )
-
 
 @dp.callback_query(F.data == "home")
 async def home(c: CallbackQuery):
@@ -397,22 +295,23 @@ async def home(c: CallbackQuery):
     )
     await c.answer()
 
-
 @dp.callback_query(F.data == "profile")
 async def profile(c: CallbackQuery):
-    u = get_user(c.from_user.id)
-    lang = u["lang"]
-    count, _ = await get_referral_data(c.from_user.id)
-    text = TEXT[lang]["profile_text"].format(
-        u["user_id"], u["wins"], u["losses"], u["games"],
-        "✅" if u["is_vip"] else "❌",
-        "✅" if u["is_anonymous"] else "❌",
-        count
-    )
-    await c.message.edit_text(text, reply_markup=profile_kb(lang),
-                              parse_mode="HTML")
+    try:
+        u = get_user(c.from_user.id)
+        lang = u["lang"]
+        count, _ = await get_referral_data(c.from_user.id)
+        text = TEXT[lang]["profile_text"].format(
+            u["user_id"], u["wins"], u["losses"], u["games"],
+            "✅" if u["is_vip"] else "❌",
+            "✅" if u["is_anonymous"] else "❌",
+            count
+        )
+        await c.message.edit_text(text, reply_markup=profile_kb(lang), parse_mode="HTML")
+    except Exception as ex:
+        print("Profile Error:", ex)
+        await c.answer("Қате шықты, қайталап көріңіз.", show_alert=True)
     await c.answer()
-
 
 @dp.callback_query(F.data == "balance")
 async def balance(c: CallbackQuery):
@@ -424,15 +323,11 @@ async def balance(c: CallbackQuery):
     )
     await c.answer()
 
-
 @dp.callback_query(F.data == "rating")
 async def rating(c: CallbackQuery):
     lang = get_lang(c.from_user.id)
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT user_id, wins FROM users "
-            "ORDER BY wins DESC, games DESC, user_id ASC LIMIT 10"
-        )
+        cur.execute("SELECT user_id, wins FROM users ORDER BY wins DESC, games DESC, user_id ASC LIMIT 10")
         rows = cur.fetchall()
     lines = [TEXT[lang]["rating_text"]]
     if not rows:
@@ -449,11 +344,8 @@ async def rating(c: CallbackQuery):
             except Exception:
                 pass
             lines.append(f"\n{pos}. {name} — {wins}")
-    await c.message.edit_text("".join(lines),
-                              reply_markup=back_kb(lang),
-                              parse_mode="HTML")
+    await c.message.edit_text("".join(lines), reply_markup=back_kb(lang), parse_mode="HTML")
     await c.answer()
-
 
 @dp.callback_query(F.data == "referrals")
 async def referrals(c: CallbackQuery):
@@ -467,20 +359,14 @@ async def referrals(c: CallbackQuery):
     )
     await c.answer()
 
-
 @dp.callback_query(F.data == "language")
 async def language(c: CallbackQuery):
     kb = InlineKeyboardBuilder()
     for code, name in [("kz", "Қазақша"), ("ru", "Русский"), ("en", "English")]:
-        kb.button(text=name, callback_data=f"setlang_{code}",
-                  icon_custom_emoji_id=EMOJI_IDS["info"])
+        kb.button(text=name, callback_data=f"setlang_{code}", icon_custom_emoji_id=EMOJI_IDS["info"])
     kb.adjust(1)
-    await c.message.edit_text(
-        TEXT[get_lang(c.from_user.id)]["language"],
-        reply_markup=kb.as_markup(), parse_mode="HTML"
-    )
+    await c.message.edit_text(TEXT[get_lang(c.from_user.id)]["language"], reply_markup=kb.as_markup(), parse_mode="HTML")
     await c.answer()
-
 
 @dp.callback_query(F.data.startswith("setlang_"))
 async def set_language(c: CallbackQuery):
@@ -489,8 +375,7 @@ async def set_language(c: CallbackQuery):
         await c.answer("Тіл табылмады.", show_alert=True)
         return
     with db() as conn, conn.cursor() as cur:
-        cur.execute("UPDATE users SET lang=%s WHERE user_id=%s",
-                    (lang, c.from_user.id))
+        cur.execute("UPDATE users SET lang=%s WHERE user_id=%s", (lang, c.from_user.id))
     u = get_user(c.from_user.id)
     await c.message.edit_text(
         TEXT[lang]["welcome"].format(float(u["balance"])),
@@ -499,40 +384,27 @@ async def set_language(c: CallbackQuery):
     )
     await c.answer()
 
-
 @dp.callback_query(F.data == "play")
 async def play(c: CallbackQuery):
     t = TEXT[get_lang(c.from_user.id)]
     kb = InlineKeyboardBuilder()
-    kb.button(text=t["lobby_create"], callback_data="lobby_create",
-              icon_custom_emoji_id=EMOJI_IDS["join"])
-    kb.button(text=t["lobby_search"], callback_data="lobby_search",
-              icon_custom_emoji_id=EMOJI_IDS["search"])
-    kb.button(text=t["back"], callback_data="home",
-              icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.button(text=t["lobby_create"], callback_data="lobby_create", icon_custom_emoji_id=EMOJI_IDS["join"])
+    kb.button(text=t["lobby_search"], callback_data="lobby_search", icon_custom_emoji_id=EMOJI_IDS["search"])
+    kb.button(text=t["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
     kb.adjust(1)
-    await c.message.edit_text(t["lobby_menu"],
-                              reply_markup=kb.as_markup(),
-                              parse_mode="HTML")
+    await c.message.edit_text(t["lobby_menu"], reply_markup=kb.as_markup(), parse_mode="HTML")
     await c.answer()
-
 
 @dp.callback_query(F.data == "lobby_create")
 async def lobby_create(c: CallbackQuery, state: FSMContext):
     lang = get_lang(c.from_user.id)
     kb = InlineKeyboardBuilder()
-    kb.button(text=TEXT[lang]["dice"], callback_data="lc_dice",
-              icon_custom_emoji_id=EMOJI_IDS["dice"])
-    kb.button(text=TEXT[lang]["darts"], callback_data="lc_darts",
-              icon_custom_emoji_id=EMOJI_IDS["darts"])
-    kb.button(text=TEXT[lang]["back"], callback_data="play",
-              icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.button(text=TEXT[lang]["dice"], callback_data="lc_dice", icon_custom_emoji_id=EMOJI_IDS["dice"])
+    kb.button(text=TEXT[lang]["darts"], callback_data="lc_darts", icon_custom_emoji_id=EMOJI_IDS["darts"])
+    kb.button(text=TEXT[lang]["back"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["back"])
     kb.adjust(1)
-    await c.message.edit_text(TEXT[lang]["choose"],
-                              reply_markup=kb.as_markup(),
-                              parse_mode="HTML")
+    await c.message.edit_text(TEXT[lang]["choose"], reply_markup=kb.as_markup(), parse_mode="HTML")
     await c.answer()
-
 
 @dp.callback_query(F.data.in_({"lc_dice", "lc_darts"}))
 async def lobby_choose_game(c: CallbackQuery, state: FSMContext):
@@ -546,14 +418,12 @@ async def lobby_choose_game(c: CallbackQuery, state: FSMContext):
     )
     await c.answer()
 
-
 @dp.message(AmountState.lobby_bet)
 async def lobby_set_bet(message: Message, state: FSMContext):
     lang = get_lang(message.from_user.id)
     try:
         amount = money(message.text.replace(",", "."))
-        if amount <= 0:
-            raise ValueError
+        if amount <= 0: raise ValueError
     except Exception:
         await message.answer(TEXT[lang]["bad_amount"])
         return
@@ -570,8 +440,7 @@ async def lobby_set_bet(message: Message, state: FSMContext):
 
     with db() as conn, conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO lobbies(lobby_id,host_id,chat_id,game_type,bet_amount) "
-            "VALUES(%s,%s,%s,%s,%s)",
+            "INSERT INTO lobbies(lobby_id,host_id,chat_id,game_type,bet_amount) VALUES(%s,%s,%s,%s,%s)",
             (lobby_id, message.from_user.id, message.chat.id, game, amount)
         )
         cur.execute(
@@ -582,101 +451,84 @@ async def lobby_set_bet(message: Message, state: FSMContext):
     me = await bot.get_me()
     link = f"https://t.me/{me.username}?start=lobby_{lobby_id}"
     kb = InlineKeyboardBuilder()
-    kb.button(text=TEXT[lang]["lobby_join_btn"], url=link,
-              icon_custom_emoji_id=EMOJI_IDS["join"])
-    kb.button(text=TEXT[lang]["back"], callback_data="home",
-              icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.button(text=TEXT[lang]["lobby_join_btn"], url=link, icon_custom_emoji_id=EMOJI_IDS["join"])
+    kb.button(text=TEXT[lang]["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
     kb.adjust(1)
 
     await message.answer(
-        TEXT[lang]["lobby_created"].format(
-            lobby_id, amount, TEXT[lang][game], link
-        ),
-        reply_markup=kb.as_markup(),
-        parse_mode="HTML",
-        disable_web_page_preview=True
+        TEXT[lang]["lobby_created"].format(lobby_id, amount, TEXT[lang][game], link),
+        reply_markup=kb.as_markup(), parse_mode="HTML", disable_web_page_preview=True
     )
     await state.clear()
-
 
 @dp.callback_query(F.data == "lobby_search")
 async def lobby_search(c: CallbackQuery):
     lang = get_lang(c.from_user.id)
-    with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT lobby_id,game_type,bet_amount FROM lobbies "
-            "WHERE status='waiting' AND host_id != %s "
-            "ORDER BY created_at DESC LIMIT 20",
-            (c.from_user.id,)
-        )
-        rows = cur.fetchall()
-    if not rows:
+    try:
+        with db() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT lobby_id,game_type,bet_amount FROM lobbies WHERE status='waiting' AND host_id != %s ORDER BY created_at DESC LIMIT 20",
+                (c.from_user.id,)
+            )
+            rows = cur.fetchall()
+            
+        if not rows:
+            await c.message.edit_text(
+                TEXT[lang]["lobby_search_empty"],
+                reply_markup=back_kb(lang, "play"),
+                parse_mode="HTML"
+            )
+            await c.answer()
+            return
+            
+        kb = InlineKeyboardBuilder()
+        for lid, gt, bet in rows:
+            label = f"{'🎲' if gt=='dice' else '🎯'} ${bet} — {lid}"
+            kb.button(text=label, callback_data=f"lj_{lid}")
+        kb.button(text=TEXT[lang]["back"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["back"])
+        kb.adjust(1)
+        
         await c.message.edit_text(
-            TEXT[lang]["lobby_search_empty"],
-            reply_markup=back_kb(lang, "play"),
+            TEXT[lang]["lobby_search_title"],
+            reply_markup=kb.as_markup(),
             parse_mode="HTML"
         )
-        await c.answer()
-        return
-    kb = InlineKeyboardBuilder()
-    for lid, gt, bet in rows:
-        label = f"{'🎲' if gt=='dice' else '🎯'} ${bet} — {lid}"
-        kb.button(text=label, callback_data=f"lj_{lid}")
-    kb.button(text=TEXT[lang]["back"], callback_data="play",
-              icon_custom_emoji_id=EMOJI_IDS["back"])
-    kb.adjust(1)
-    await c.message.edit_text(
-        TEXT[lang]["lobby_search_title"],
-        reply_markup=kb.as_markup(),
-        parse_mode="HTML"
-    )
+    except Exception as ex:
+        print("Lobby Search Error:", ex)
+        await c.answer("Лобби іздеу кезінде қате шықты.", show_alert=True)
     await c.answer()
-
 
 async def try_join_lobby(target, uid, lobby_id):
     u = get_user(uid)
     lang = u["lang"]
-    with db() as conn, conn.cursor(
-        cursor_factory=psycopg2.extras.DictCursor
-    ) as cur:
-        cur.execute(
-            "SELECT * FROM lobbies WHERE lobby_id=%s AND status='waiting'",
-            (lobby_id,)
-        )
+    with db() as conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        cur.execute("SELECT * FROM lobbies WHERE lobby_id=%s AND status='waiting'", (lobby_id,))
         lobby = cur.fetchone()
         if not lobby:
             await target.answer(TEXT[lang]["lobby_not_found"])
             return
-        cur.execute(
-            "SELECT user_id FROM lobby_players WHERE lobby_id=%s",
-            (lobby_id,)
-        )
+        cur.execute("SELECT user_id FROM lobby_players WHERE lobby_id=%s", (lobby_id,))
         players = [r[0] for r in cur.fetchall()]
         bet = Decimal(lobby["bet_amount"])
+        
         if uid in players or len(players) >= 2:
             await target.answer(TEXT[lang]["lobby_not_found"])
             return
         if Decimal(u["balance"]) < bet:
             await target.answer(TEXT[lang]["no_money"])
             return
-        cur.execute(
-            "INSERT INTO lobby_players(lobby_id,user_id) VALUES(%s,%s)",
-            (lobby_id, uid)
-        )
+            
+        cur.execute("INSERT INTO lobby_players(lobby_id,user_id) VALUES(%s,%s)", (lobby_id, uid))
         players.append(uid)
-        cur.execute(
-            "UPDATE lobbies SET status='playing' WHERE lobby_id=%s",
-            (lobby_id,)
-        )
+        cur.execute("UPDATE lobbies SET status='playing' WHERE lobby_id=%s", (lobby_id,))
+        
     await target.answer(TEXT[lang]["lobby_joined"])
     await run_duel(lobby_id, players, lobby["game_type"], bet, lobby["chat_id"])
-
 
 @dp.callback_query(F.data.startswith("lj_"))
 async def lobby_join_by_btn(c: CallbackQuery):
     await try_join_lobby(c.message, c.from_user.id, c.data.removeprefix("lj_"))
     await c.answer()
-
 
 @dp.message(Command("join"))
 async def join_by_code(message: Message):
@@ -686,24 +538,16 @@ async def join_by_code(message: Message):
         return
     await try_join_lobby(message, message.from_user.id, parts[1].upper())
 
-
 async def run_duel(lobby_id, players, game, bet, chat_id):
     p1, p2 = players
-
     with db() as conn, conn.cursor() as cur:
         cur.execute(
-            "UPDATE users SET balance=balance-%s "
-            "WHERE user_id IN (%s,%s) AND balance >= %s",
+            "UPDATE users SET balance=balance-%s WHERE user_id IN (%s,%s) AND balance >= %s",
             (bet, p1, p2, bet)
         )
         if cur.rowcount != 2:
-            cur.execute(
-                "UPDATE lobbies SET status='waiting' WHERE lobby_id=%s",
-                (lobby_id,)
-            )
-            await bot.send_message(
-                chat_id, "Баланс жеткіліксіз. Ойын тоқтатылды."
-            )
+            cur.execute("UPDATE lobbies SET status='waiting' WHERE lobby_id=%s", (lobby_id,))
+            await bot.send_message(chat_id, "Баланс жеткіліксіз. Ойын тоқтатылды.")
             return
 
     dice_symbol = "🎲" if game == "dice" else "🎯"
@@ -723,46 +567,36 @@ async def run_duel(lobby_id, players, game, bet, chat_id):
             winner, loser = (p1, p2) if a.dice.value > b.dice.value else (p2, p1)
             prize = (bet * 2 * Decimal("0.95")).quantize(Decimal("0.01"))
             cur.execute(
-                "UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 "
-                "WHERE user_id=%s", (prize, winner)
+                "UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s", (prize, winner)
             )
             cur.execute(
-                "UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s",
-                (loser,)
+                "UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s", (loser,)
             )
             result = f"🏆 Жеңімпаз: <code>{winner}</code>\n💰 Ұтыс: ${prize}"
         cur.execute("DELETE FROM lobbies WHERE lobby_id=%s", (lobby_id,))
 
     await bot.send_message(chat_id, result, parse_mode="HTML")
 
-
 @dp.callback_query(F.data == "deposit")
 async def deposit_start(c: CallbackQuery, state: FSMContext):
     lang = get_lang(c.from_user.id)
     await state.set_state(AmountState.deposit)
-    await c.message.edit_text(
-        TEXT[lang]["deposit_amount"],
-        parse_mode="HTML"
-    )
+    await c.message.edit_text(TEXT[lang]["deposit_amount"], parse_mode="HTML")
     await c.answer()
-
 
 @dp.message(AmountState.deposit)
 async def make_invoice(message: Message, state: FSMContext):
     lang = get_lang(message.from_user.id)
     try:
         amount = money(message.text.replace(",", "."))
-        if amount < Decimal("1.00"):
-            raise ValueError
+        if amount < Decimal("1.00"): raise ValueError
     except Exception:
         await message.answer(TEXT[lang]["bad_amount"])
         return
 
     order_id = f"dg_{message.from_user.id}_{uuid.uuid4().hex}"
     invoice = await lp.invoices.create(
-        str(amount),
-        order_id=order_id,
-        description=f"Duel Games deposit user {message.from_user.id}"
+        str(amount), order_id=order_id, description=f"Duel Games deposit user {message.from_user.id}"
     )
 
     with db() as conn, conn.cursor() as cur:
@@ -772,85 +606,47 @@ async def make_invoice(message: Message, state: FSMContext):
         )
 
     kb = InlineKeyboardBuilder()
-    kb.row(
-        InlineKeyboardButton(
-            text=TEXT[lang]["pay"],
-            url=invoice.pay_url,
-            icon_custom_emoji_id=EMOJI_IDS["crypto"]
-        )
-    )
-    await message.answer(
-        TEXT[lang]["created"].format(amount),
-        reply_markup=kb.as_markup(),
-        parse_mode="HTML"
-    )
+    kb.row(InlineKeyboardButton(text=TEXT[lang]["pay"], url=invoice.pay_url, icon_custom_emoji_id=EMOJI_IDS["crypto"]))
+    await message.answer(TEXT[lang]["created"].format(amount), reply_markup=kb.as_markup(), parse_mode="HTML")
     await state.clear()
-
 
 @lp.invoice_paid()
 async def on_invoice_paid(invoice):
     order_id = str(invoice.order_id)
-    with db() as conn, conn.cursor(
-        cursor_factory=psycopg2.extras.DictCursor
-    ) as cur:
-        cur.execute(
-            "SELECT * FROM payments WHERE order_id=%s FOR UPDATE",
-            (order_id,)
-        )
+    with db() as conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        cur.execute("SELECT * FROM payments WHERE order_id=%s FOR UPDATE", (order_id,))
         payment = cur.fetchone()
         if not payment or payment["status"] == "paid":
             return
-        if not invoice.matches(
-            order_id=order_id,
-            amount=str(payment["amount"])
-        ):
+        if not invoice.matches(order_id=order_id, amount=str(payment["amount"])):
             return
-        cur.execute(
-            "UPDATE payments SET status='paid',paid_at=NOW() "
-            "WHERE order_id=%s AND status='pending'",
-            (order_id,)
-        )
+        cur.execute("UPDATE payments SET status='paid',paid_at=NOW() WHERE order_id=%s AND status='pending'", (order_id,))
         if cur.rowcount != 1:
             return
-        cur.execute(
-            "UPDATE users SET balance=balance+%s,has_deposited=TRUE "
-            "WHERE user_id=%s",
-            (payment["amount"], payment["user_id"])
-        )
-        cur.execute(
-            "SELECT balance,lang FROM users WHERE user_id=%s",
-            (payment["user_id"],)
-        )
+        cur.execute("UPDATE users SET balance=balance+%s,has_deposited=TRUE WHERE user_id=%s", (payment["amount"], payment["user_id"]))
+        cur.execute("SELECT balance,lang FROM users WHERE user_id=%s", (payment["user_id"],))
         user = cur.fetchone()
 
     try:
         await bot.send_message(
-            payment["user_id"],
-            TEXT[user["lang"]]["paid"].format(float(user["balance"])),
-            parse_mode="HTML"
+            payment["user_id"], TEXT[user["lang"]]["paid"].format(float(user["balance"])), parse_mode="HTML"
         )
     except Exception as exc:
         print("Telegram notify error:", repr(exc))
-
 
 @dp.callback_query(F.data == "withdraw")
 async def withdraw_start(c: CallbackQuery, state: FSMContext):
     lang = get_lang(c.from_user.id)
     await state.set_state(AmountState.withdraw)
-    await c.message.edit_text(
-        TEXT[lang]["withdraw_amount"],
-        parse_mode="HTML"
-    )
+    await c.message.edit_text(TEXT[lang]["withdraw_amount"], parse_mode="HTML")
     await c.answer()
-
 
 @dp.message(AmountState.withdraw)
 async def withdraw_amount(message: Message, state: FSMContext):
     lang = get_lang(message.from_user.id)
     try:
         amount = money(message.text.replace(",", "."))
-        if amount < Decimal("1.00"):
-            raise ValueError
+        if amount < Decimal("1.00"): raise ValueError
     except Exception:
         await message.answer(TEXT[lang]["bad_amount"])
         return
@@ -863,11 +659,7 @@ async def withdraw_amount(message: Message, state: FSMContext):
 
     await state.update_data(withdraw_amount=str(amount))
     await state.set_state(AmountState.address)
-    await message.answer(
-        TEXT[lang]["withdraw_address"],
-        parse_mode="HTML"
-    )
-
+    await message.answer(TEXT[lang]["withdraw_address"], parse_mode="HTML")
 
 @dp.message(AmountState.address)
 async def withdraw_address(message: Message, state: FSMContext):
@@ -881,34 +673,23 @@ async def withdraw_address(message: Message, state: FSMContext):
     uid = message.from_user.id
 
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "UPDATE users SET balance=balance-%s "
-            "WHERE user_id=%s AND balance >= %s",
-            (amount, uid, amount)
-        )
+        cur.execute("UPDATE users SET balance=balance-%s WHERE user_id=%s AND balance >= %s", (amount, uid, amount))
         if cur.rowcount != 1:
             await message.answer(TEXT[get_lang(uid)]["no_money"])
             await state.clear()
             return
         cur.execute(
-            "INSERT INTO withdrawals(user_id,amount,address) "
-            "VALUES(%s,%s,%s) RETURNING id",
-            (uid, amount, address)
+            "INSERT INTO withdrawals(user_id,amount,address) VALUES(%s,%s,%s) RETURNING id", (uid, amount, address)
         )
         wid = cur.fetchone()[0]
 
     await message.answer(TEXT[get_lang(uid)]["withdraw_sent"])
-
     if ADMIN_ID:
         await bot.send_message(
             ADMIN_ID,
-            f"Жаңа шығару өтінімі #{wid}\n"
-            f"User: {uid}\n"
-            f"Amount: ${amount}\n"
-            f"Address: {address}"
+            f"Жаңа шығару өтінімі #{wid}\nUser: {uid}\nAmount: ${amount}\nAddress: {address}"
         )
     await state.clear()
-
 
 @dp.message(Command("admin"))
 async def admin_cmd(message: Message):
@@ -917,7 +698,6 @@ async def admin_cmd(message: Message):
         return
     await admin_show_home(message, edit=False)
 
-
 @dp.callback_query(F.data == "admin_home")
 async def admin_home_cb(c: CallbackQuery):
     if not is_admin(c.from_user.id):
@@ -925,7 +705,6 @@ async def admin_home_cb(c: CallbackQuery):
         return
     await admin_show_home(c.message, edit=True)
     await c.answer()
-
 
 async def admin_show_home(message, edit=False):
     with db() as conn, conn.cursor() as cur:
@@ -954,12 +733,9 @@ async def admin_show_home(message, edit=False):
         f"⚔️ Ойында: <b>{playing}</b>"
     )
     if edit:
-        await message.edit_text(text, reply_markup=kb.as_markup(),
-                                parse_mode="HTML")
+        await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     else:
-        await message.answer(text, reply_markup=kb.as_markup(),
-                             parse_mode="HTML")
-
+        await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
 @dp.callback_query(F.data == "adm_withdrawals")
 async def adm_withdrawals(c: CallbackQuery):
@@ -967,35 +743,24 @@ async def adm_withdrawals(c: CallbackQuery):
         await c.answer("⛔", show_alert=True)
         return
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT id,user_id,amount,address FROM withdrawals "
-            "WHERE status='pending' ORDER BY id"
-        )
+        cur.execute("SELECT id,user_id,amount,address FROM withdrawals WHERE status='pending' ORDER BY id")
         rows = cur.fetchall()
 
     if not rows:
-        await c.message.edit_text(
-            "✅ Күтіп тұрған шығару жоқ.",
-            reply_markup=back_kb("kz", "admin_home")
-        )
+        await c.message.edit_text("✅ Күтіп тұрған шығару жоқ.", reply_markup=back_kb("kz", "admin_home"))
         await c.answer()
         return
 
     text = "💸 <b>Күтіп тұрған шығарулар</b>\n\n"
     kb = InlineKeyboardBuilder()
     for wid, uid, amt, addr in rows[:10]:
-        text += (
-            f"#{wid} | <code>{uid}</code> | <b>${amt}</b>\n"
-            f"<code>{addr}</code>\n\n"
-        )
+        text += f"#{wid} | <code>{uid}</code> | <b>${amt}</b>\n<code>{addr}</code>\n\n"
         kb.button(text=f"✅ #{wid}", callback_data=f"wapprove_{wid}")
         kb.button(text=f"❌ #{wid}", callback_data=f"wreject_{wid}")
     kb.button(text="⬅️ Артқа", callback_data="admin_home")
     kb.adjust(2, 2, 2, 2, 2, 1)
-    await c.message.edit_text(text, reply_markup=kb.as_markup(),
-                              parse_mode="HTML")
+    await c.message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     await c.answer()
-
 
 @dp.callback_query(F.data.startswith("wapprove_"))
 async def wapprove(c: CallbackQuery):
@@ -1004,11 +769,7 @@ async def wapprove(c: CallbackQuery):
         return
     wid = int(c.data.split("_")[1])
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "UPDATE withdrawals SET status='approved' "
-            "WHERE id=%s AND status='pending' RETURNING user_id,amount",
-            (wid,)
-        )
+        cur.execute("UPDATE withdrawals SET status='approved' WHERE id=%s AND status='pending' RETURNING user_id,amount", (wid,))
         row = cur.fetchone()
     if not row:
         await c.answer("Өңделген", show_alert=True)
@@ -1017,7 +778,6 @@ async def wapprove(c: CallbackQuery):
     await c.message.edit_text(f"✅ #{wid} approved", parse_mode="HTML")
     await c.answer()
 
-
 @dp.callback_query(F.data.startswith("wreject_"))
 async def wreject(c: CallbackQuery):
     if not is_admin(c.from_user.id):
@@ -1025,26 +785,15 @@ async def wreject(c: CallbackQuery):
         return
     wid = int(c.data.split("_")[1])
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "UPDATE withdrawals SET status='rejected' "
-            "WHERE id=%s AND status='pending' RETURNING user_id,amount",
-            (wid,)
-        )
+        cur.execute("UPDATE withdrawals SET status='rejected' WHERE id=%s AND status='pending' RETURNING user_id,amount", (wid,))
         row = cur.fetchone()
         if not row:
             await c.answer("Өңделген", show_alert=True)
             return
-        cur.execute(
-            "UPDATE users SET balance=balance+%s WHERE user_id=%s",
-            (row[1], row[0])
-        )
-    await bot.send_message(
-        row[0],
-        f"❌ Шығару #{wid} қабылданбады. ${row[1]} қайтарылды."
-    )
+        cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (row[1], row[0]))
+    await bot.send_message(row[0], f"❌ Шығару #{wid} қабылданбады. ${row[1]} қайтарылды.")
     await c.message.edit_text(f"❌ #{wid} rejected", parse_mode="HTML")
     await c.answer()
-
 
 @dp.callback_query(F.data == "adm_lobbies")
 async def adm_lobbies(c: CallbackQuery):
@@ -1052,23 +801,16 @@ async def adm_lobbies(c: CallbackQuery):
         await c.answer("⛔", show_alert=True)
         return
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "SELECT lobby_id,host_id,game_type,bet_amount,status "
-            "FROM lobbies ORDER BY created_at DESC LIMIT 20"
-        )
+        cur.execute("SELECT lobby_id,host_id,game_type,bet_amount,status FROM lobbies ORDER BY created_at DESC LIMIT 20")
         rows = cur.fetchall()
     if not rows:
         text = "🎮 Лобби жоқ."
     else:
         text = "🎮 <b>Лоббилер</b>\n\n"
         for lid, hid, gt, bet, st in rows:
-            text += (
-                f"<code>{lid}</code> | {gt} | ${bet} | {st} | host {hid}\n"
-            )
-    await c.message.edit_text(text, reply_markup=back_kb("kz", "admin_home"),
-                              parse_mode="HTML")
+            text += f"<code>{lid}</code> | {gt} | ${bet} | {st} | host {hid}\n"
+    await c.message.edit_text(text, reply_markup=back_kb("kz", "admin_home"), parse_mode="HTML")
     await c.answer()
-
 
 @dp.callback_query(F.data == "adm_users")
 async def adm_users(c: CallbackQuery):
@@ -1085,27 +827,17 @@ async def adm_users(c: CallbackQuery):
     )
     await c.answer()
 
-
 @app.get("/")
 async def health():
-    return {
-        "status": "ok",
-        "service": "Duel Games",
-        "webhook": "/lavepay"
-    }
-
+    return {"status": "ok", "service": "Duel Games", "webhook": "/lavepay"}
 
 install_lavepay(app, lp)
-
 
 @app.on_event("startup")
 async def startup():
     init_db()
-    app.state.bot_task = asyncio.create_task(
-        dp.start_polling(bot)
-    )
+    app.state.bot_task = asyncio.create_task(dp.start_polling(bot))
     print("Duel Games started; LavePay webhook: /lavepay")
-
 
 @app.on_event("shutdown")
 async def shutdown():
@@ -1117,7 +849,6 @@ async def shutdown():
         except asyncio.CancelledError:
             pass
     await bot.session.close()
-
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=PORT)
