@@ -93,7 +93,7 @@ TEXT = {
     "b_w": "Бот лақтырып жатыр...", "b_t": "Сіз лақтырыңыз:", "b_d": "Тең! Қайтарылды.", "b_win": "Жеңдіңіз! ${}", "b_lose": "Жеңілдіңіз.", 
     "chk_m": "Мультичек", "chk_c": "Жасау", "chk_g": "Алу", "chk_a": "Сома (USD):", "chk_cn": "Адам саны:", "adm_g": "ID мен сома (мыс: 123 5.5):",
     "choose_lang": "Тілді таңдаңыз:", "c_h": "Орёл", "c_t": "Решка", "m_h": "Больше", "m_l": "Меньше", "e_e": "Чет", "e_o": "Нечет", "c_w": "🎉 Жеңдіңіз! Ұтыс: ${}", "c_l": "❌ Жеңілдіңіз.", 
-    "your_turn": "Тандаңыз:", "rolled": "Түскен сан: {}"
+    "your_turn": "Тандаңыз:", "rolled": "Түскен сан: {}", "l_empty": "Қазір онлайн лобби жоқ. Өзіңіз ашыңыз!", "l_join": "Лоббиге кірдіңіз! Ойын басталады...", "l_win": "🏆 Сіз жеңдіңіз! Ұтыс: ${}", "l_lose": "❌ Сіз жеңілдіңіз. Қарсыласыңыз жеңді.", "l_draw": "🤝 Тең ойын! Ставкалар қайтарылды.", "l_list": "Онлайн лоббилер:", "l_not_found": "Лобби табылмады немесе толы."
 },
 "ru": {
     "w": "Привет! <b>Duel Games</b>!\n\n" + e("wallet") + " Баланс: <b>${:.2f}</b>", "play": "Играть", "prof": "Профиль", "bal": "Баланс", "dep": "Пополнить", "wd": "Вывод", "lang": "Язык", "adm": "Админ", "chk": "Мультичек", 
@@ -105,7 +105,7 @@ TEXT = {
     "b_w": "Бот бросает...", "b_t": "Ваш ход:", "b_d": "Ничья! Возврат.", "b_win": "Победа! ${}", "b_lose": "Проигрыш.", 
     "chk_m": "Мультичек", "chk_c": "Создать", "chk_g": "Активировать", "chk_a": "Сумма (USD):", "chk_cn": "Кол-во людей:", "adm_g": "ID и сумма (напр: 123 5.5):",
     "choose_lang": "Выберите язык:", "c_h": "Орел", "c_t": "Решка", "m_h": "Больше", "m_l": "Меньше", "e_e": "Чет", "e_o": "Нечет", "c_w": "🎉 Победа! Выигрыш: ${}", "c_l": "❌ Вы проиграли.", 
-    "your_turn": "Выберите:", "rolled": "Выпало число: {}"
+    "your_turn": "Выберите:", "rolled": "Выпало число: {}", "l_empty": "Сейчас нет онлайн лобби. Создайте своё!", "l_join": "Вы вошли в лобби! Игра начинается...", "l_win": "🏆 Вы победили! Выигрыш: ${}", "l_lose": "❌ Вы проиграли. Ваш соперник победил.", "l_draw": "🤝 Ничья! Ставки возвращены.", "l_list": "Онлайн лобби:", "l_not_found": "Лобби не найдено или заполнено."
 },
 "en": {
     "w": "Hi! <b>Duel Games</b>!\n\n" + e("wallet") + " Balance: <b>${:.2f}</b>", "play": "Play", "prof": "Profile", "bal": "Balance", "dep": "Deposit", "wd": "Withdraw", "lang": "Language", "adm": "Admin", "chk": "Multi-check", 
@@ -117,7 +117,7 @@ TEXT = {
     "b_w": "Bot rolling...", "b_t": "Your turn:", "b_d": "Draw! Refunded.", "b_win": "You won! ${}", "b_lose": "You lost.", 
     "chk_m": "Multi-check", "chk_c": "Create", "chk_g": "Claim", "chk_a": "Amount (USD):", "chk_cn": "Number of people:", "adm_g": "ID and amount (e.g. 123 5.5):",
     "choose_lang": "Choose language:", "c_h": "Heads", "c_t": "Tails", "m_h": "Higher", "m_l": "Lower", "e_e": "Even", "e_o": "Odd", "c_w": "🎉 You won! Prize: ${}", "c_l": "❌ You lost.", 
-    "your_turn": "Choose:", "rolled": "Rolled: {}"
+    "your_turn": "Choose:", "rolled": "Rolled: {}", "l_empty": "No online lobbies right now. Create one!", "l_join": "You joined the lobby! Game starts...", "l_win": "🏆 You won! Prize: ${}", "l_lose": "❌ You lost. Your opponent won.", "l_draw": "🤝 Draw! Bets refunded.", "l_list": "Online lobbies:", "l_not_found": "Lobby not found or full."
 }
 }
 
@@ -238,7 +238,8 @@ async def mode_bot(c: CallbackQuery, state: FSMContext):
     
     if g in ("dice", "darts"):
         await state.set_state(S.duel); await c.message.edit_text(TEXT[u["lang"]]["b_w"])
-        ds = "🎲" if g == "dice" else "🎯"
+        # Тек дартс болса дартс, қалғандарында кубик
+        ds = "🎯" if g == "darts" else "🎲"
         await asyncio.sleep(1); bd = await bot.send_dice(c.message.chat.id, emoji=ds); await asyncio.sleep(4)
         await state.update_data(bv=bd.dice.value); await c.message.answer(TEXT[u["lang"]]["b_t"]); await c.answer()
     else:
@@ -252,7 +253,8 @@ async def mode_bot(c: CallbackQuery, state: FSMContext):
 async def duel_roll(m: Message, state: FSMContext):
     l = get_lang(m.from_user.id); d = await state.get_data()
     if m.forward_from or m.forward_from_chat or m.forward_origin: return await m.answer("❌")
-    if m.dice.emoji != ("🎲" if d["g"] == "dice" else "🎯"): return await m.answer("❌")
+    # Егер ойын дартс болса дартс тексереміз, әйтпесе кубик
+    if m.dice.emoji != ("🎯" if d["g"] == "darts" else "🎲"): return await m.answer("❌")
     b = Decimal(d["b"]); bv = d.get("bv", 0); uv = m.dice.value
     with db() as cn, cn.cursor() as cur:
         if bv == uv: cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (b, m.from_user.id)); res = TEXT[l]["b_d"]
@@ -266,6 +268,7 @@ async def new_games_play(c: CallbackQuery, state: FSMContext):
     d = await state.get_data(); b = Decimal(d.get("b", "0")); g = d.get("g"); l = get_lang(c.from_user.id); uid = c.from_user.id; choice = c.data.split("_")[1:]
     await c.message.edit_text(TEXT[l]["b_w"])
     
+    # Мұнда тек кубик қолданылады!
     bd = await bot.send_dice(c.message.chat.id, emoji="🎲")
     await asyncio.sleep(4)
     num = bd.dice.value
@@ -291,8 +294,7 @@ async def new_games_play(c: CallbackQuery, state: FSMContext):
             cur.execute("UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s", (uid,))
             res_msg = f"{res_text}\n\n{TEXT[l]['c_l']}"
             
-    await c.message.answer(res_msg, parse_mode="HTML")
-    await state.clear(); await c.answer()
+    await c.message.answer(res_msg, parse_mode="HTML"); await state.clear(); await c.answer()
 
 @dp.callback_query(F.data == "mp")
 async def mode_pl(c: CallbackQuery, state: FSMContext):
@@ -309,23 +311,23 @@ async def l_search(c: CallbackQuery):
     l = get_lang(c.from_user.id)
     with db() as cn, cn.cursor() as cur:
         cur.execute("SELECT lobby_id,game_type,bet_amount FROM lobbies WHERE status='waiting' AND host_id != %s LIMIT 20", (c.from_user.id,)); rows = cur.fetchall()
-    if not rows: return await c.message.edit_text("Бос.", reply_markup=back_kb(l, "play"))
+    if not rows: return await c.message.edit_text(TEXT[l]["l_empty"], reply_markup=back_kb(l, "play"))
     kb = InlineKeyboardBuilder()
     for lid, gt, b in rows: kb.button(text=f"{gt} ${b} — {lid}", callback_data=f"lj_{lid}")
     kb.row(InlineKeyboardButton(text=TEXT[l]["back"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["back"])); kb.adjust(1)
-    await c.message.edit_text("Лоббилер:", reply_markup=kb.as_markup()); await c.answer()
+    await c.message.edit_text(TEXT[l]["l_list"], reply_markup=kb.as_markup()); await c.answer()
 
 async def join_lobby(t, uid, lid):
     u = get_user(uid); l = u["lang"]
     with db() as cn, cn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
         cur.execute("SELECT * FROM lobbies WHERE lobby_id=%s AND status='waiting'", (lid,)); lb = cur.fetchone()
-        if not lb: return await t.answer("Табылмады.")
+        if not lb: return await t.answer(TEXT[l]["l_not_found"])
         cur.execute("SELECT user_id FROM lobby_players WHERE lobby_id=%s", (lid,)); ps = [r[0] for r in cur.fetchall()]
         b = Decimal(lb["bet_amount"])
-        if uid in ps or len(ps) >= 2: return await t.answer("Толы.")
+        if uid in ps or len(ps) >= 2: return await t.answer(TEXT[l]["l_not_found"])
         if Decimal(u["balance"]) < b: return await t.answer(TEXT[l]["nom"])
         cur.execute("INSERT INTO lobby_players VALUES(%s,%s)", (lid, uid)); ps.append(uid); cur.execute("UPDATE lobbies SET status='playing' WHERE lobby_id=%s", (lid,))
-    await t.answer("Кірдіңіз!")
+    await t.answer(TEXT[l]["l_join"])
     try:
         with db() as cn, cn.cursor() as cur:
             cur.execute("UPDATE users SET balance=balance-%s WHERE user_id=%s AND balance >= %s", (b, ps[0], b))
@@ -334,16 +336,35 @@ async def join_lobby(t, uid, lid):
             if cur.rowcount != 1: raise ValueError
     except:
         with db() as cn, cn.cursor() as cur: cur.execute("UPDATE lobbies SET status='waiting' WHERE lobby_id=%s", (lid,))
-        return await bot.send_message(lb["chat_id"], "Баланс жеткіліксіз.")
-    ds = "🎲" if lb["game_type"] == "dice" else "🎯"
-    a = await bot.send_dice(lb["chat_id"], emoji=ds); await asyncio.sleep(4); bb = await bot.send_dice(lb["chat_id"], emoji=ds); await asyncio.sleep(4)
+        return await bot.send_message(lb["chat_id"], TEXT[l]["nom"])
+    
+    # Тек дартс болса дартс, қалғандарында кубик
+    ds = "🎯" if lb["game_type"] == "darts" else "🎲"
+    a = await bot.send_dice(ps[0], emoji=ds); await asyncio.sleep(4)
+    bb = await bot.send_dice(ps[1], emoji=ds); await asyncio.sleep(4)
+    
     with db() as cn, cn.cursor() as cur:
-        if a.dice.value == bb.dice.value: cur.execute("UPDATE users SET balance=balance+%s WHERE user_id IN (%s,%s)", (b, ps[0], ps[1])); r = "Тең!"
+        if a.dice.value == bb.dice.value:
+            cur.execute("UPDATE users SET balance=balance+%s WHERE user_id IN (%s,%s)", (b, ps[0], ps[1]))
+            w_id = None
         else:
-            w, lo = (ps[0], ps[1]) if a.dice.value > bb.dice.value else (ps[1], ps[0]); p = (b * 2 * Decimal("0.95")).quantize(Decimal("0.01"))
-            cur.execute("UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s", (p, w)); cur.execute("UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s", (lo,)); r = f"Жеңімпаз: <code>{w}</code>\n${p}"
+            w, lo = (ps[0], ps[1]) if a.dice.value > bb.dice.value else (ps[1], ps[0])
+            p = (b * 2 * Decimal("0.95")).quantize(Decimal("0.01"))
+            cur.execute("UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s", (p, w))
+            cur.execute("UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s", (lo,))
+            w_id = w
         cur.execute("DELETE FROM lobbies WHERE lobby_id=%s", (lid,))
-    await bot.send_message(lb["chat_id"], r, parse_mode="HTML")
+    
+    for p_id in ps:
+        lang_p = get_lang(p_id)
+        try:
+            if w_id is None:
+                await bot.send_message(p_id, TEXT[lang_p]["l_draw"])
+            elif p_id == w_id:
+                await bot.send_message(p_id, TEXT[lang_p]["l_win"].format(p))
+            else:
+                await bot.send_message(p_id, TEXT[lang_p]["l_lose"])
+        except: pass
 
 @dp.callback_query(F.data.startswith("lj_"))
 async def j_btn(c: CallbackQuery): await join_lobby(c.message, c.from_user.id, c.data[3:]); await c.answer()
