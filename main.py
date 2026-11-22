@@ -93,7 +93,7 @@ TEXT = {
     "b_w": "Бот лақтырып жатыр...", "b_t": "Сіз лақтырыңыз:", "b_d": "Тең! Қайтарылды.", "b_win": "Жеңдіңіз! ${}", "b_lose": "Жеңілдіңіз.", 
     "chk_m": "Мультичек", "chk_c": "Жасау", "chk_g": "Алу", "chk_a": "Сома (USD):", "chk_cn": "Адам саны:", "adm_g": "ID мен сома (мыс: 123 5.5):",
     "choose_lang": "Тілді таңдаңыз:", "c_h": "Орёл", "c_t": "Решка", "m_h": "Больше", "m_l": "Меньше", "e_e": "Чет", "e_o": "Нечет", "c_w": "🎉 Жеңдіңіз! Ұтыс: ${}", "c_l": "❌ Жеңілдіңіз.", 
-    "your_turn": "Тандаңыз:", "rolled": "Түскен сан: {}", "tie": "Тең түсті! Қайтарылды."
+    "your_turn": "Тандаңыз:", "rolled": "Түскен сан: {}"
 },
 "ru": {
     "w": "Привет! <b>Duel Games</b>!\n\n" + e("wallet") + " Баланс: <b>${:.2f}</b>", "play": "Играть", "prof": "Профиль", "bal": "Баланс", "dep": "Пополнить", "wd": "Вывод", "lang": "Язык", "adm": "Админ", "chk": "Мультичек", 
@@ -105,7 +105,7 @@ TEXT = {
     "b_w": "Бот бросает...", "b_t": "Ваш ход:", "b_d": "Ничья! Возврат.", "b_win": "Победа! ${}", "b_lose": "Проигрыш.", 
     "chk_m": "Мультичек", "chk_c": "Создать", "chk_g": "Активировать", "chk_a": "Сумма (USD):", "chk_cn": "Кол-во людей:", "adm_g": "ID и сумма (напр: 123 5.5):",
     "choose_lang": "Выберите язык:", "c_h": "Орел", "c_t": "Решка", "m_h": "Больше", "m_l": "Меньше", "e_e": "Чет", "e_o": "Нечет", "c_w": "🎉 Победа! Выигрыш: ${}", "c_l": "❌ Вы проиграли.", 
-    "your_turn": "Выберите:", "rolled": "Выпало число: {}", "tie": "Ничья! Возврат."
+    "your_turn": "Выберите:", "rolled": "Выпало число: {}"
 },
 "en": {
     "w": "Hi! <b>Duel Games</b>!\n\n" + e("wallet") + " Balance: <b>${:.2f}</b>", "play": "Play", "prof": "Profile", "bal": "Balance", "dep": "Deposit", "wd": "Withdraw", "lang": "Language", "adm": "Admin", "chk": "Multi-check", 
@@ -117,7 +117,7 @@ TEXT = {
     "b_w": "Bot rolling...", "b_t": "Your turn:", "b_d": "Draw! Refunded.", "b_win": "You won! ${}", "b_lose": "You lost.", 
     "chk_m": "Multi-check", "chk_c": "Create", "chk_g": "Claim", "chk_a": "Amount (USD):", "chk_cn": "Number of people:", "adm_g": "ID and amount (e.g. 123 5.5):",
     "choose_lang": "Choose language:", "c_h": "Heads", "c_t": "Tails", "m_h": "Higher", "m_l": "Lower", "e_e": "Even", "e_o": "Odd", "c_w": "🎉 You won! Prize: ${}", "c_l": "❌ You lost.", 
-    "your_turn": "Choose:", "rolled": "Rolled: {}", "tie": "Draw! Refunded."
+    "your_turn": "Choose:", "rolled": "Rolled: {}"
 }
 }
 
@@ -236,43 +236,55 @@ async def mode_bot(c: CallbackQuery, state: FSMContext):
     
     await state.update_data(b=str(b), g=g)
     
-    kb = InlineKeyboardBuilder()
-    if g == "coin": kb.button(text=TEXT[u["lang"]]["c_h"], callback_data="play_c_h", icon_custom_emoji_id=EMOJI_IDS["coin"]).button(text=TEXT[u["lang"]]["c_t"], callback_data="play_c_t", icon_custom_emoji_id=EMOJI_IDS["coin"])
-    elif g == "more": kb.button(text=TEXT[u["lang"]]["m_h"], callback_data="play_m_h", icon_custom_emoji_id=EMOJI_IDS["more"]).button(text=TEXT[u["lang"]]["m_l"], callback_data="play_m_l", icon_custom_emoji_id=EMOJI_IDS["less"])
-    elif g == "even": kb.button(text=TEXT[u["lang"]]["e_e"], callback_data="play_e_e", icon_custom_emoji_id=EMOJI_IDS["even"]).button(text=TEXT[u["lang"]]["e_o"], callback_data="play_e_o", icon_custom_emoji_id=EMOJI_IDS["even"])
-    kb.adjust(2); await c.message.edit_text(TEXT[u["lang"]]["your_turn"], reply_markup=kb.as_markup()); await c.answer()
+    if g in ("dice", "darts"):
+        await state.set_state(S.duel); await c.message.edit_text(TEXT[u["lang"]]["b_w"])
+        ds = "🎲" if g == "dice" else "🎯"
+        await asyncio.sleep(1); bd = await bot.send_dice(c.message.chat.id, emoji=ds); await asyncio.sleep(4)
+        await state.update_data(bv=bd.dice.value); await c.message.answer(TEXT[u["lang"]]["b_t"]); await c.answer()
+    else:
+        kb = InlineKeyboardBuilder()
+        if g == "coin": kb.button(text=TEXT[u["lang"]]["c_h"], callback_data="play_c_h", icon_custom_emoji_id=EMOJI_IDS["coin"]).button(text=TEXT[u["lang"]]["c_t"], callback_data="play_c_t", icon_custom_emoji_id=EMOJI_IDS["coin"])
+        elif g == "more": kb.button(text=TEXT[u["lang"]]["m_h"], callback_data="play_m_h", icon_custom_emoji_id=EMOJI_IDS["more"]).button(text=TEXT[u["lang"]]["m_l"], callback_data="play_m_l", icon_custom_emoji_id=EMOJI_IDS["less"])
+        elif g == "even": kb.button(text=TEXT[u["lang"]]["e_e"], callback_data="play_e_e", icon_custom_emoji_id=EMOJI_IDS["even"]).button(text=TEXT[u["lang"]]["e_o"], callback_data="play_e_o", icon_custom_emoji_id=EMOJI_IDS["even"])
+        kb.adjust(2); await c.message.edit_text(TEXT[u["lang"]]["your_turn"], reply_markup=kb.as_markup()); await c.answer()
+
+@dp.message(S.duel, F.dice)
+async def duel_roll(m: Message, state: FSMContext):
+    l = get_lang(m.from_user.id); d = await state.get_data()
+    if m.forward_from or m.forward_from_chat or m.forward_origin: return await m.answer("❌")
+    if m.dice.emoji != ("🎲" if d["g"] == "dice" else "🎯"): return await m.answer("❌")
+    b = Decimal(d["b"]); bv = d.get("bv", 0); uv = m.dice.value
+    with db() as cn, cn.cursor() as cur:
+        if bv == uv: cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (b, m.from_user.id)); res = TEXT[l]["b_d"]
+        elif uv > bv:
+            p = (b * 2 * Decimal("0.95")).quantize(Decimal("0.01")); cur.execute("UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s", (p, m.from_user.id)); res = TEXT[l]["b_win"].format(p)
+        else: cur.execute("UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s", (m.from_user.id,)); res = TEXT[l]["b_lose"]
+    await m.answer(res); await state.clear()
 
 @dp.callback_query(F.data.startswith("play_"))
 async def new_games_play(c: CallbackQuery, state: FSMContext):
     d = await state.get_data(); b = Decimal(d.get("b", "0")); g = d.get("g"); l = get_lang(c.from_user.id); uid = c.from_user.id; choice = c.data.split("_")[1:]
-    
     await c.message.edit_text(TEXT[l]["b_w"])
     
-    ds = "🎲" if g in ("dice", "more", "even") else "🎯"
-    bd = await bot.send_dice(c.message.chat.id, emoji=ds)
+    bd = await bot.send_dice(c.message.chat.id, emoji="🎲")
     await asyncio.sleep(4)
     num = bd.dice.value
-    
     win = False
-    tie = False
+    res_text = TEXT[l]["rolled"].format(num)
     
     if g == "coin":
         res = "h" if num % 2 != 0 else "t"
-        win = (choice[1] == res); res_text = TEXT[l]["c_h"] if res == "h" else TEXT[l]["c_t"]
+        win = (choice[1] == res)
+        res_text = f"{TEXT[l]['c_h'] if res == 'h' else TEXT[l]['c_t']}\n" + res_text
     elif g == "more":
-        if num == 3 or num == 4: tie = True
-        elif choice[1] == "h": win = num > 4
-        else: win = num < 3
-        res_text = TEXT[l]["rolled"].format(num)
+        if choice[1] == "h": win = num >= 4
+        else: win = num <= 3
     elif g == "even":
-        win = (num % 2 == 0 and choice[1] == "e") or (num % 2 != 0 and choice[1] == "o")
-        res_text = TEXT[l]["rolled"].format(num)
+        if choice[1] == "e": win = num % 2 == 0
+        else: win = num % 2 != 0
         
     with db() as cn, cn.cursor() as cur:
-        if tie:
-            cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (b, uid))
-            res_msg = f"{res_text}\n\n{TEXT[l]['tie']}"
-        elif win:
+        if win:
             p = (b * 2 * Decimal("0.95")).quantize(Decimal("0.01")); cur.execute("UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s", (p, uid))
             res_msg = f"{res_text}\n\n{TEXT[l]['c_w'].format(p)}"
         else:
@@ -385,9 +397,7 @@ async def wd_ad(m: Message, state: FSMContext):
     l = get_lang(m.from_user.id); ad = m.text.strip(); net = detect_net(ad)
     if not net or net not in ("TRX", "BSC", "GRAM"): return await m.answer("❌ Формат қате (TRC20/BEP20/TON)")
     d = await state.get_data(); a = Decimal(d["a"]); uid = m.from_user.id
-    
     asset_to_send = "USDT" 
-    
     async with httpx.AsyncClient() as cl:
         r = await cl.get(f"{LAVEPAY_BASE}/withdrawals/networks", headers={"X-Api-Key": LAVEPAY_API_KEY})
         info = next((i for i in r.json().get("data", {}).get("networks", []) if i["asset"] == asset_to_send and i["network"] == net), None)
