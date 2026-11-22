@@ -43,7 +43,7 @@ EMOJI_IDS = {
     "id": "5291913773307667021", "games": "5282843764451195532",
     "anonymous": "5251422397893989847", "lobby": "5282843764451195532",
     "search": "5420271804411292547", "join": "5449683594425410231",
-    "gift": "5197371802132800918", 
+    "gift": "5197371802132800918", "bot": "5291913773307667021",
 }
 
 EMOJI_FALLBACK = {
@@ -52,7 +52,7 @@ EMOJI_FALLBACK = {
     "win": "🏆", "lose": "❌", "back": "⬅️", "info": "ℹ️",
     "admin": "🛡️", "usdt": "💵", "id": "🆔", "games": "🎮",
     "anonymous": "👤", "lobby": "🎮", "search": "🔍", "join": "✅",
-    "gift": "🎁",
+    "gift": "🎁", "bot": "🤖",
 }
 
 def e(key):
@@ -71,7 +71,6 @@ def db():
 
 def init_db():
     with db() as conn, conn.cursor() as cur:
-        # Ескі қисық кестелерді өшіру (қателерді болдырмау үшін)
         cur.execute("DROP TABLE IF EXISTS lobby_players CASCADE;")
         cur.execute("DROP TABLE IF EXISTS lobbies CASCADE;")
         cur.execute("DROP TABLE IF EXISTS users CASCADE;")
@@ -80,64 +79,45 @@ def init_db():
         cur.execute("DROP TABLE IF EXISTS multi_checks CASCADE;")
         cur.execute("DROP TABLE IF EXISTS check_claims CASCADE;")
 
-        # Жаңа дұрыс кестелерді құру
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY, 
-            balance NUMERIC(18,2) NOT NULL DEFAULT 0,
-            wins INTEGER NOT NULL DEFAULT 0, 
-            losses INTEGER NOT NULL DEFAULT 0,
-            games INTEGER NOT NULL DEFAULT 0, 
-            lang TEXT NOT NULL DEFAULT 'kz',
-            is_vip BOOLEAN NOT NULL DEFAULT FALSE, 
-            is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
-            referrer_id BIGINT, 
-            has_deposited BOOLEAN NOT NULL DEFAULT FALSE
+            user_id BIGINT PRIMARY KEY, balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0,
+            games INTEGER NOT NULL DEFAULT 0, lang TEXT NOT NULL DEFAULT 'kz',
+            is_vip BOOLEAN NOT NULL DEFAULT FALSE, is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
+            referrer_id BIGINT, has_deposited BOOLEAN NOT NULL DEFAULT FALSE
         )""")
-        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS payments (
-            order_id TEXT PRIMARY KEY, user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
-            created_at TIMESTAMP NOT NULL DEFAULT NOW(), paid_at TIMESTAMP
+            order_id TEXT PRIMARY KEY, user_id BIGINT NOT NULL, amount NUMERIC(18,2) NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP NOT NULL DEFAULT NOW(), paid_at TIMESTAMP
         )""")
-        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS withdrawals (
-            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL, address TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL, amount NUMERIC(18,2) NOT NULL,
+            address TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
-        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobbies (
             lobby_id TEXT PRIMARY KEY, host_id BIGINT NOT NULL, chat_id BIGINT NOT NULL,
             game_type TEXT NOT NULL, bet_amount NUMERIC(18,2) NOT NULL,
             status TEXT NOT NULL DEFAULT 'waiting', created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
-        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobby_players (
             lobby_id TEXT REFERENCES lobbies(lobby_id) ON DELETE CASCADE,
             user_id BIGINT NOT NULL, PRIMARY KEY(lobby_id, user_id)
         )""")
-
         cur.execute("""
         CREATE TABLE IF NOT EXISTS multi_checks (
-            check_id TEXT PRIMARY KEY,
-            amount NUMERIC(18,2) NOT NULL,
-            max_claims INTEGER NOT NULL,
-            claimed INTEGER NOT NULL DEFAULT 0,
-            creator_id BIGINT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'active',
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            check_id TEXT PRIMARY KEY, amount NUMERIC(18,2) NOT NULL, max_claims INTEGER NOT NULL,
+            claimed INTEGER NOT NULL DEFAULT 0, creator_id BIGINT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active', created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
-
         cur.execute("""
         CREATE TABLE IF NOT EXISTS check_claims (
             check_id TEXT REFERENCES multi_checks(check_id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL,
-            claimed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            user_id BIGINT NOT NULL, claimed_at TIMESTAMP NOT NULL DEFAULT NOW(),
             PRIMARY KEY(check_id, user_id)
         )""")
 
@@ -178,16 +158,17 @@ async def get_referral_data(uid):
         username = "DuelGamesBot"
     return count, f"https://t.me/{username}?start=ref_{uid}"
 
-# 🆕 МҰНДА check_get ЖӘНЕ admin_give КҮЙЛЕРІ ҚОСЫЛДЫ
 class AmountState(StatesGroup):
     deposit = State()
     withdraw = State()
     address = State()
     lobby_bet = State()
+    lobby_mode = State()
     check_create_amount = State()
     check_create_count = State()
     check_get = State()
     admin_give = State()
+    duel_wait_dice = State()
 
 TEXT = {
     "kz": {
@@ -217,6 +198,14 @@ TEXT = {
         "lobby_search_title": e("search") + " <b>Онлайн лоббилер</b>\n\nЛобби таңдаңыз:",
         "lobby_joined": "Лоббиге кірдіңіз! Ойын басталады...",
         "lobby_not_found": "Лобби табылмады немесе толы.", "lobby_join_btn": "Лоббиге кіру",
+        "lobby_mode": "Ойын режимін таңдаңыз:",
+        "mode_bot": e("bot") + " Ботпен ойнау", "mode_players": "👥 Ойыншылармен ойнау",
+        "bot_waiting": "🤖 Бот кости лақтырып жатыр... Күте тұрыңыз.",
+        "bot_your_turn": "🎲 Енді сіз лақтырыңыз! Төмендегі костиді басыңыз:",
+        "bot_draw": "🤝 Тең ойын! Ставка қайтарылды.",
+        "bot_win": "🏆 Сіз жеңдіңіз! Ұтыс: ${}",
+        "bot_lose": "❌ Сіз жеңілдіңіз. Боттың нәтижесі жоғарырақ болды.",
+        "bot_invalid": "⚠️ Тек өзіңіз лақтырған костиді жіберіңіз!",
         "check_menu": e("gift") + " <b>Мультичек</b>\n\nМультичек дегеніміз — белгілі бір соманы көп адамға бөлу. Сілтемені басқан адам ақшаны ала алады.",
         "check_create_btn": "Мультичек жасау", "check_get_btn": "Мультичекті алу",
         "check_amount": "Жалпы соманы енгізіңіз (USD):", 
@@ -257,6 +246,14 @@ TEXT = {
         "lobby_search_title": e("search") + " <b>Онлайн лобби</b>\n\nВыберите лобби:",
         "lobby_joined": "Вы вошли в лобби! Игра начинается...",
         "lobby_not_found": "Лобби не найдено или заполнено.", "lobby_join_btn": "Войти в лобби",
+        "lobby_mode": "Выберите режим игры:",
+        "mode_bot": e("bot") + " Играть с ботом", "mode_players": "👥 Играть с игроками",
+        "bot_waiting": "🤖 Бот бросает кости... Подождите.",
+        "bot_your_turn": "🎲 Теперь ваш ход! Нажмите на кости ниже:",
+        "bot_draw": "🤝 Ничья! Ставка возвращена.",
+        "bot_win": "🏆 Вы победили! Выигрыш: ${}",
+        "bot_lose": "❌ Вы проиграли. У бота результат выше.",
+        "bot_invalid": "⚠️ Отправляйте только свои кости!",
         "check_menu": e("gift") + " <b>Мультичек</b>\n\nМультичек — это разделение суммы на многих людей. Кто перейдет по ссылке, тот получит деньги.",
         "check_create_btn": "Создать мультичек", "check_get_btn": "Активировать чек",
         "check_amount": "Введите общую сумму (USD):", 
@@ -297,6 +294,14 @@ TEXT = {
         "lobby_search_title": e("search") + " <b>Online lobbies</b>\n\nChoose a lobby:",
         "lobby_joined": "You joined the lobby! Game starts...",
         "lobby_not_found": "Lobby not found or full.", "lobby_join_btn": "Join lobby",
+        "lobby_mode": "Choose game mode:",
+        "mode_bot": e("bot") + " Play with bot", "mode_players": "👥 Play with players",
+        "bot_waiting": "🤖 Bot is rolling... Please wait.",
+        "bot_your_turn": "🎲 Your turn! Tap the dice below:",
+        "bot_draw": "🤝 Draw! Bet refunded.",
+        "bot_win": "🏆 You won! Prize: ${}",
+        "bot_lose": "❌ You lost. Bot's roll was higher.",
+        "bot_invalid": "⚠️ Send only YOUR OWN dice!",
         "check_menu": e("gift") + " <b>Multi-check</b>\n\nMulti-check splits a sum among multiple people. Anyone with the link gets money.",
         "check_create_btn": "Create multi-check", "check_get_btn": "Claim multi-check",
         "check_amount": "Enter total amount (USD):", 
@@ -353,9 +358,7 @@ async def start(message: Message):
                 if ref != message.from_user.id:
                     with db() as conn, conn.cursor() as cur:
                         cur.execute(
-                            "UPDATE users AS u SET referrer_id=%s "
-                            "WHERE u.user_id=%s AND u.referrer_id IS NULL "
-                            "AND EXISTS (SELECT 1 FROM users WHERE user_id=%s)",
+                            "UPDATE users AS u SET referrer_id=%s WHERE u.user_id=%s AND u.referrer_id IS NULL AND EXISTS (SELECT 1 FROM users WHERE user_id=%s)",
                             (ref, message.from_user.id, ref)
                         )
             except (ValueError, TypeError):
@@ -389,15 +392,11 @@ async def profile(c: CallbackQuery):
         u = get_user(c.from_user.id)
         lang = u["lang"]
         count, _ = await get_referral_data(c.from_user.id)
-        
         is_vip = u.get("is_vip", False)
         is_anon = u.get("is_anonymous", False)
-        
         text = TEXT[lang]["profile_text"].format(
             u["user_id"], u["wins"], u["losses"], u["games"],
-            "✅" if is_vip else "❌",
-            "✅" if is_anon else "❌",
-            count
+            "✅" if is_vip else "❌", "✅" if is_anon else "❌", count
         )
         await c.message.edit_text(text, reply_markup=profile_kb(lang), parse_mode="HTML")
     except Exception as ex:
@@ -444,9 +443,7 @@ async def referrals(c: CallbackQuery):
     count, link = await get_referral_data(c.from_user.id)
     await c.message.edit_text(
         TEXT[lang]["referral_text"].format(count, link),
-        reply_markup=back_kb(lang),
-        parse_mode="HTML",
-        disable_web_page_preview=True
+        reply_markup=back_kb(lang), parse_mode="HTML", disable_web_page_preview=True
     )
     await c.answer()
 
@@ -470,8 +467,7 @@ async def set_language(c: CallbackQuery):
     u = get_user(c.from_user.id)
     await c.message.edit_text(
         TEXT[lang]["welcome"].format(float(u["balance"])),
-        reply_markup=main_kb(c.from_user.id, lang),
-        parse_mode="HTML"
+        reply_markup=main_kb(c.from_user.id, lang), parse_mode="HTML"
     )
     await c.answer()
 
@@ -527,17 +523,105 @@ async def lobby_set_bet(message: Message, state: FSMContext):
 
     data = await state.get_data()
     game = data["game"]
+    
+    await state.update_data(bet_amount=str(amount))
+    await state.set_state(AmountState.lobby_mode)
+    
+    kb = InlineKeyboardBuilder()
+    kb.button(text=TEXT[lang]["mode_bot"], callback_data="mode_bot", icon_custom_emoji_id=EMOJI_IDS["bot"])
+    kb.button(text=TEXT[lang]["mode_players"], callback_data="mode_players", icon_custom_emoji_id=EMOJI_IDS["join"])
+    kb.button(text=TEXT[lang]["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.adjust(1)
+    
+    await message.answer(TEXT[lang]["lobby_mode"], reply_markup=kb.as_markup(), parse_mode="HTML")
+
+@dp.callback_query(F.data == "mode_bot")
+async def start_bot_duel(c: CallbackQuery, state: FSMContext):
+    lang = get_lang(c.from_user.id)
+    data = await state.get_data()
+    game = data.get("game")
+    bet = Decimal(data.get("bet_amount"))
+    uid = c.from_user.id
+    chat_id = c.message.chat.id
+    
+    u = get_user(uid)
+    if Decimal(u["balance"]) < bet:
+        await c.answer(TEXT[lang]["no_money"], show_alert=True)
+        await state.clear()
+        return
+
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET balance=balance-%s WHERE user_id=%s AND balance >= %s", (bet, uid, bet))
+        if cur.rowcount != 1:
+            await c.answer("Қате", show_alert=True)
+            return
+
+    await state.set_state(AmountState.duel_wait_dice)
+    await state.update_data(bet_amount=str(bet), game=game)
+    
+    await c.message.edit_text(TEXT[lang]["bot_waiting"])
+    
+    dice_symbol = "🎲" if game == "dice" else "🎯"
+    await asyncio.sleep(1)
+    bot_dice = await bot.send_dice(chat_id, emoji=dice_symbol)
+    await asyncio.sleep(4)
+    
+    await state.update_data(bot_dice_val=bot_dice.dice.value)
+    
+    await c.message.answer(TEXT[lang]["bot_your_turn"])
+    await c.answer()
+
+@dp.message(AmountState.duel_wait_dice, F.dice)
+async def duel_user_roll(message: Message, state: FSMContext):
+    lang = get_lang(message.from_user.id)
+    data = await state.get_data()
+    
+    # 🛡️ ҚОРҒАНЫС: Форвардталған костиді қабылдамау
+    if message.forward_from or message.forward_from_chat or message.forward_sender_name or message.forward_origin:
+        await message.answer(TEXT[lang]["bot_invalid"])
+        return
+        
+    game = data.get("game")
+    expected_emoji = "🎲" if game == "dice" else "🎯"
+    
+    if message.dice.emoji != expected_emoji:
+        await message.answer(TEXT[lang]["bot_invalid"])
+        return
+
+    bet = Decimal(data.get("bet_amount"))
+    bot_val = data.get("bot_dice_val", 0)
+    user_val = message.dice.value
+    uid = message.from_user.id
+
+    with db() as conn, conn.cursor() as cur:
+        if bot_val == user_val:
+            cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (bet, uid))
+            result = TEXT[lang]["bot_draw"]
+        elif user_val > bot_val:
+            prize = (bet * 2 * Decimal("0.95")).quantize(Decimal("0.01"))
+            cur.execute("UPDATE users SET balance=balance+%s, wins=wins+1, games=games+1 WHERE user_id=%s", (prize, uid))
+            result = TEXT[lang]["bot_win"].format(prize)
+        else:
+            cur.execute("UPDATE users SET losses=losses+1, games=games+1 WHERE user_id=%s", (uid,))
+            result = TEXT[lang]["bot_lose"]
+            
+    await message.answer(result, parse_mode="HTML")
+    await state.clear()
+
+@dp.callback_query(F.data == "mode_players")
+async def start_player_duel(c: CallbackQuery, state: FSMContext):
+    lang = get_lang(c.from_user.id)
+    data = await state.get_data()
+    game = data.get("game")
+    amount = Decimal(data.get("bet_amount"))
     lobby_id = uuid.uuid4().hex[:6].upper()
 
     with db() as conn, conn.cursor() as cur:
         cur.execute(
             "INSERT INTO lobbies(lobby_id,host_id,chat_id,game_type,bet_amount) VALUES(%s,%s,%s,%s,%s)",
-            (lobby_id, message.from_user.id, message.chat.id, game, amount)
+            (lobby_id, c.from_user.id, c.message.chat.id, game, amount)
         )
-        cur.execute(
-            "INSERT INTO lobby_players(lobby_id,user_id) VALUES(%s,%s)",
-            (lobby_id, message.from_user.id)
-        )
+        cur.execute("INSERT INTO lobby_players(lobby_id,user_id) VALUES(%s,%s)", (lobby_id, c.from_user.id))
 
     me = await bot.get_me()
     link = f"https://t.me/{me.username}?start=lobby_{lobby_id}"
@@ -546,11 +630,12 @@ async def lobby_set_bet(message: Message, state: FSMContext):
     kb.button(text=TEXT[lang]["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
     kb.adjust(1)
 
-    await message.answer(
+    await c.message.edit_text(
         TEXT[lang]["lobby_created"].format(lobby_id, amount, TEXT[lang][game], link),
         reply_markup=kb.as_markup(), parse_mode="HTML", disable_web_page_preview=True
     )
     await state.clear()
+    await c.answer()
 
 @dp.callback_query(F.data == "lobby_search")
 async def lobby_search(c: CallbackQuery):
@@ -566,8 +651,7 @@ async def lobby_search(c: CallbackQuery):
         if not rows:
             await c.message.edit_text(
                 TEXT[lang]["lobby_search_empty"],
-                reply_markup=back_kb(lang, "play"),
-                parse_mode="HTML"
+                reply_markup=back_kb(lang, "play"), parse_mode="HTML"
             )
             await c.answer()
             return
@@ -581,8 +665,7 @@ async def lobby_search(c: CallbackQuery):
         
         await c.message.edit_text(
             TEXT[lang]["lobby_search_title"],
-            reply_markup=kb.as_markup(),
-            parse_mode="HTML"
+            reply_markup=kb.as_markup(), parse_mode="HTML"
         )
     except Exception as ex:
         print("Lobby Search Error:", ex)
@@ -776,8 +859,7 @@ async def withdraw_address(message: Message, state: FSMContext):
     await message.answer(TEXT[get_lang(uid)]["withdraw_sent"])
     if ADMIN_ID:
         await bot.send_message(
-            ADMIN_ID,
-            f"Жаңа шығару өтінімі #{wid}\nUser: {uid}\nAmount: ${amount}\nAddress: {address}"
+            ADMIN_ID, f"Жаңа шығару өтінімі #{wid}\nUser: {uid}\nAmount: ${amount}\nAddress: {address}"
         )
     await state.clear()
 
@@ -787,22 +869,17 @@ async def withdraw_address(message: Message, state: FSMContext):
 async def check_menu(c: CallbackQuery):
     lang = get_lang(c.from_user.id)
     kb = InlineKeyboardBuilder()
-    
     if is_admin(c.from_user.id):
         kb.button(text=TEXT[lang]["check_create_btn"], callback_data="check_create", icon_custom_emoji_id=EMOJI_IDS["gift"])
-    
     kb.button(text=TEXT[lang]["check_get_btn"], callback_data="check_get", icon_custom_emoji_id=EMOJI_IDS["join"])
     kb.button(text=TEXT[lang]["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
     kb.adjust(1)
-    
     await c.message.edit_text(TEXT[lang]["check_menu"], reply_markup=kb.as_markup(), parse_mode="HTML")
     await c.answer()
 
 @dp.callback_query(F.data == "check_create")
 async def check_create(c: CallbackQuery, state: FSMContext):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔", show_alert=True)
     lang = get_lang(c.from_user.id)
     await state.set_state(AmountState.check_create_amount)
     await c.message.edit_text(TEXT[lang]["check_amount"], parse_mode="HTML")
@@ -817,7 +894,6 @@ async def check_create_amount(message: Message, state: FSMContext):
     except Exception:
         await message.answer(TEXT[lang]["bad_amount"])
         return
-        
     await state.update_data(total_amount=str(amount))
     await state.set_state(AmountState.check_create_count)
     await message.answer(TEXT[lang]["check_count"])
@@ -826,9 +902,6 @@ async def check_create_amount(message: Message, state: FSMContext):
 async def check_create_count(message: Message, state: FSMContext):
     lang = get_lang(message.from_user.id)
     data = await state.get_data()
-    if "total_amount" not in data:
-        return
-        
     try:
         count = int(message.text)
         if count <= 0: raise ValueError
@@ -841,18 +914,11 @@ async def check_create_count(message: Message, state: FSMContext):
     check_id = uuid.uuid4().hex[:8].upper()
     
     with db() as conn, conn.cursor() as cur:
-        cur.execute(
-            "INSERT INTO multi_checks(check_id, amount, max_claims, creator_id) VALUES(%s,%s,%s,%s)",
-            (check_id, total_amount, count, message.from_user.id)
-        )
+        cur.execute("INSERT INTO multi_checks(check_id, amount, max_claims, creator_id) VALUES(%s,%s,%s,%s)", (check_id, total_amount, count, message.from_user.id))
         
     me = await bot.get_me()
     link = f"https://t.me/{me.username}?start=check_{check_id}"
-    
-    await message.answer(
-        TEXT[lang]["check_created"].format(total_amount, count, per_user, link),
-        parse_mode="HTML", disable_web_page_preview=True
-    )
+    await message.answer(TEXT[lang]["check_created"].format(total_amount, count, per_user, link), parse_mode="HTML", disable_web_page_preview=True)
     await state.clear()
 
 @dp.callback_query(F.data == "check_get")
@@ -869,7 +935,6 @@ async def check_get_code(message: Message, state: FSMContext):
         check_id = text.split("start=check_")[1].split()[0].upper()
     else:
         check_id = text.upper()
-        
     await claim_check(message, message.from_user.id, check_id)
     await state.clear()
 
@@ -878,51 +943,36 @@ async def claim_check(target, uid, check_id):
     with db() as conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
         cur.execute("SELECT * FROM multi_checks WHERE check_id=%s FOR UPDATE", (check_id,))
         check = cur.fetchone()
-        
         if not check or check["status"] != "active":
-            await target.answer(TEXT[lang]["check_not_found"])
-            return
-            
+            return await target.answer(TEXT[lang]["check_not_found"])
         if check["claimed"] >= check["max_claims"]:
-            await target.answer(TEXT[lang]["check_empty"])
-            return
-            
+            return await target.answer(TEXT[lang]["check_empty"])
         cur.execute("SELECT 1 FROM check_claims WHERE check_id=%s AND user_id=%s", (check_id, uid))
         if cur.fetchone():
-            await target.answer(TEXT[lang]["check_already"])
-            return
+            return await target.answer(TEXT[lang]["check_already"])
             
         per_user = (Decimal(check["amount"]) / check["max_claims"]).quantize(Decimal("0.01"))
-        
         cur.execute("INSERT INTO check_claims(check_id, user_id) VALUES(%s,%s)", (check_id, uid))
         cur.execute("UPDATE multi_checks SET claimed = claimed + 1 WHERE check_id=%s", (check_id,))
-        
         if check["claimed"] + 1 >= check["max_claims"]:
             cur.execute("UPDATE multi_checks SET status='finished' WHERE check_id=%s", (check_id,))
-            
         cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (per_user, uid))
         cur.execute("SELECT balance FROM users WHERE user_id=%s", (uid,))
         new_bal = cur.fetchone()[0]
         
-    await target.answer(
-        TEXT[lang]["check_success"].format(per_user, new_bal),
-        parse_mode="HTML"
-    )
+    await target.answer(TEXT[lang]["check_success"].format(per_user, new_bal), parse_mode="HTML")
 
 # ============= АДМИН ПАНЕЛЬ =============
 
 @dp.message(Command("admin"))
 async def admin_cmd(message: Message):
     if not is_admin(message.from_user.id):
-        await message.answer(TEXT[get_lang(message.from_user.id)]["admin_only"])
-        return
+        return await message.answer(TEXT[get_lang(message.from_user.id)]["admin_only"])
     await admin_show_home(message, edit=False)
 
 @dp.callback_query(F.data == "admin_home")
 async def admin_home_cb(c: CallbackQuery):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔ Тек әкімшіге", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔ Тек әкімшіге", show_alert=True)
     await admin_show_home(c.message, edit=True)
     await c.answer()
 
@@ -953,16 +1003,12 @@ async def admin_show_home(message, edit=False):
         f"🎮 Ашық лобби: <b>{open_l}</b>\n"
         f"⚔️ Ойында: <b>{playing}</b>"
     )
-    if edit:
-        await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
-    else:
-        await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    if edit: await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+    else: await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
 
 @dp.callback_query(F.data == "adm_give_balance")
 async def adm_give_balance(c: CallbackQuery, state: FSMContext):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔", show_alert=True)
     lang = get_lang(c.from_user.id)
     await state.set_state(AmountState.admin_give)
     await c.message.edit_text(TEXT[lang]["admin_give_prompt"], parse_mode="HTML")
@@ -970,44 +1016,32 @@ async def adm_give_balance(c: CallbackQuery, state: FSMContext):
 
 @dp.message(AmountState.admin_give)
 async def admin_give_process(message: Message, state: FSMContext):
-    if not is_admin(message.from_user.id):
-        return
+    if not is_admin(message.from_user.id): return
     lang = get_lang(message.from_user.id)
-    
     try:
         parts = message.text.split()
-        if len(parts) != 2: raise ValueError
         target_id = int(parts[0])
         amount = money(parts[1].replace(",", "."))
         if amount <= 0: raise ValueError
     except Exception:
-        await message.answer("Қате формат. Мысалы: 12345678 5.5")
-        return
+        return await message.answer("Қате формат. Мысалы: 12345678 5.5")
         
-    get_user(target_id) # ensure user exists
+    get_user(target_id)
     with db() as conn, conn.cursor() as cur:
         cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (amount, target_id))
-        
     await message.answer(TEXT[lang]["admin_give_success"])
-    try:
-        await bot.send_message(target_id, f"🎁 Сізге әкімшіден ${amount} баланс қосылды!")
-    except:
-        pass
+    try: await bot.send_message(target_id, f"🎁 Сізге әкімшіден ${amount} баланс қосылды!")
+    except: pass
     await state.clear()
 
 @dp.callback_query(F.data == "adm_withdrawals")
 async def adm_withdrawals(c: CallbackQuery):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔", show_alert=True)
     with db() as conn, conn.cursor() as cur:
         cur.execute("SELECT id,user_id,amount,address FROM withdrawals WHERE status='pending' ORDER BY id")
         rows = cur.fetchall()
-
     if not rows:
-        await c.message.edit_text("✅ Күтіп тұрған шығару жоқ.", reply_markup=back_kb("kz", "admin_home"))
-        await c.answer()
-        return
+        return await c.message.edit_text("✅ Күтіп тұрған шығару жоқ.", reply_markup=back_kb("kz", "admin_home"))
 
     text = "💸 <b>Күтіп тұрған шығарулар</b>\n\n"
     kb = InlineKeyboardBuilder()
@@ -1022,32 +1056,24 @@ async def adm_withdrawals(c: CallbackQuery):
 
 @dp.callback_query(F.data.startswith("wapprove_"))
 async def wapprove(c: CallbackQuery):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔", show_alert=True)
     wid = int(c.data.split("_")[1])
     with db() as conn, conn.cursor() as cur:
         cur.execute("UPDATE withdrawals SET status='approved' WHERE id=%s AND status='pending' RETURNING user_id,amount", (wid,))
         row = cur.fetchone()
-    if not row:
-        await c.answer("Өңделген", show_alert=True)
-        return
+    if not row: return await c.answer("Өңделген", show_alert=True)
     await bot.send_message(row[0], f"✅ Шығару #{wid} расталды: ${row[1]}")
     await c.message.edit_text(f"✅ #{wid} approved", parse_mode="HTML")
     await c.answer()
 
 @dp.callback_query(F.data.startswith("wreject_"))
 async def wreject(c: CallbackQuery):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔", show_alert=True)
     wid = int(c.data.split("_")[1])
     with db() as conn, conn.cursor() as cur:
         cur.execute("UPDATE withdrawals SET status='rejected' WHERE id=%s AND status='pending' RETURNING user_id,amount", (wid,))
         row = cur.fetchone()
-        if not row:
-            await c.answer("Өңделген", show_alert=True)
-            return
+        if not row: return await c.answer("Өңделген", show_alert=True)
         cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (row[1], row[0]))
     await bot.send_message(row[0], f"❌ Шығару #{wid} қабылданбады. ${row[1]} қайтарылды.")
     await c.message.edit_text(f"❌ #{wid} rejected", parse_mode="HTML")
@@ -1055,9 +1081,7 @@ async def wreject(c: CallbackQuery):
 
 @dp.callback_query(F.data == "adm_lobbies")
 async def adm_lobbies(c: CallbackQuery):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔", show_alert=True)
     with db() as conn, conn.cursor() as cur:
         cur.execute("SELECT lobby_id,host_id,game_type,bet_amount,status FROM lobbies ORDER BY created_at DESC LIMIT 20")
         rows = cur.fetchall()
@@ -1072,17 +1096,11 @@ async def adm_lobbies(c: CallbackQuery):
 
 @dp.callback_query(F.data == "adm_users")
 async def adm_users(c: CallbackQuery):
-    if not is_admin(c.from_user.id):
-        await c.answer("⛔", show_alert=True)
-        return
+    if not is_admin(c.from_user.id): return await c.answer("⛔", show_alert=True)
     with db() as conn, conn.cursor() as cur:
         cur.execute("SELECT COUNT(*),COALESCE(SUM(balance),0) FROM users")
         users, total = cur.fetchone()
-    await c.message.edit_text(
-        f"👥 Юзерлер: <b>{users}</b>\n💰 Жалпы баланс: <b>${total}</b>",
-        reply_markup=back_kb("kz", "admin_home"),
-        parse_mode="HTML"
-    )
+    await c.message.edit_text(f"👥 Юзерлер: <b>{users}</b>\n💰 Жалпы баланс: <b>${total}</b>", reply_markup=back_kb("kz", "admin_home"), parse_mode="HTML")
     await c.answer()
 
 @app.get("/")
@@ -1102,10 +1120,8 @@ async def shutdown():
     task = getattr(app.state, "bot_task", None)
     if task:
         task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        try: await task
+        except asyncio.CancelledError: pass
     await bot.session.close()
 
 if __name__ == "__main__":
