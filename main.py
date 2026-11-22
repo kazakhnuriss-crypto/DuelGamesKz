@@ -122,7 +122,6 @@ def init_db():
             user_id BIGINT NOT NULL, PRIMARY KEY(lobby_id, user_id)
         )""")
 
-        # 🆕 Кесте для мультичеков
         cur.execute("""
         CREATE TABLE IF NOT EXISTS multi_checks (
             check_id TEXT PRIMARY KEY,
@@ -134,7 +133,6 @@ def init_db():
             created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
 
-        # 🆕 Кесте для тех, кто забрал
         cur.execute("""
         CREATE TABLE IF NOT EXISTS check_claims (
             check_id TEXT REFERENCES multi_checks(check_id) ON DELETE CASCADE,
@@ -180,12 +178,15 @@ async def get_referral_data(uid):
         username = "DuelGamesBot"
     return count, f"https://t.me/{username}?start=ref_{uid}"
 
+# 🆕 МҰНДА check_get ЖӘНЕ admin_give КҮЙЛЕРІ ҚОСЫЛДЫ
 class AmountState(StatesGroup):
     deposit = State()
     withdraw = State()
     address = State()
     lobby_bet = State()
-    check_create = State()
+    check_create_amount = State()
+    check_create_count = State()
+    check_get = State()
     admin_give = State()
 
 TEXT = {
@@ -803,11 +804,11 @@ async def check_create(c: CallbackQuery, state: FSMContext):
         await c.answer("⛔", show_alert=True)
         return
     lang = get_lang(c.from_user.id)
-    await state.set_state(AmountState.check_create)
+    await state.set_state(AmountState.check_create_amount)
     await c.message.edit_text(TEXT[lang]["check_amount"], parse_mode="HTML")
     await c.answer()
 
-@dp.message(AmountState.check_create)
+@dp.message(AmountState.check_create_amount)
 async def check_create_amount(message: Message, state: FSMContext):
     lang = get_lang(message.from_user.id)
     try:
@@ -818,9 +819,10 @@ async def check_create_amount(message: Message, state: FSMContext):
         return
         
     await state.update_data(total_amount=str(amount))
+    await state.set_state(AmountState.check_create_count)
     await message.answer(TEXT[lang]["check_count"])
     
-@dp.message(AmountState.check_create)
+@dp.message(AmountState.check_create_count)
 async def check_create_count(message: Message, state: FSMContext):
     lang = get_lang(message.from_user.id)
     data = await state.get_data()
