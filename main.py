@@ -69,36 +69,64 @@ def db():
 
 def init_db():
     with db() as conn, conn.cursor() as cur:
+        # Ескі қисық кестелерді өшіру (қателерді болдырмау үшін)
+        cur.execute("DROP TABLE IF EXISTS lobby_players CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS lobbies CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS users CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS payments CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS withdrawals CASCADE;")
+
+        # Жаңа дұрыс кестелерді құру
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY, balance NUMERIC(18,2) NOT NULL DEFAULT 0,
-            wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0,
-            games INTEGER NOT NULL DEFAULT 0, lang TEXT NOT NULL DEFAULT 'kz',
-            is_vip BOOLEAN NOT NULL DEFAULT FALSE, is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
-            referrer_id BIGINT, has_deposited BOOLEAN NOT NULL DEFAULT FALSE
+            user_id BIGINT PRIMARY KEY, 
+            balance NUMERIC(18,2) NOT NULL DEFAULT 0,
+            wins INTEGER NOT NULL DEFAULT 0, 
+            losses INTEGER NOT NULL DEFAULT 0,
+            games INTEGER NOT NULL DEFAULT 0, 
+            lang TEXT NOT NULL DEFAULT 'kz',
+            is_vip BOOLEAN NOT NULL DEFAULT FALSE, 
+            is_anonymous BOOLEAN NOT NULL DEFAULT FALSE,
+            referrer_id BIGINT, 
+            has_deposited BOOLEAN NOT NULL DEFAULT FALSE
         )""")
+        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS payments (
-            order_id TEXT PRIMARY KEY, user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
-            created_at TIMESTAMP NOT NULL DEFAULT NOW(), paid_at TIMESTAMP
+            order_id TEXT PRIMARY KEY, 
+            user_id BIGINT NOT NULL,
+            amount NUMERIC(18,2) NOT NULL, 
+            status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(), 
+            paid_at TIMESTAMP
         )""")
+        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS withdrawals (
-            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL, address TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            id BIGSERIAL PRIMARY KEY, 
+            user_id BIGINT NOT NULL,
+            amount NUMERIC(18,2) NOT NULL, 
+            address TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', 
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
+        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobbies (
-            lobby_id TEXT PRIMARY KEY, host_id BIGINT NOT NULL, chat_id BIGINT NOT NULL,
-            game_type TEXT NOT NULL, bet_amount NUMERIC(18,2) NOT NULL,
-            status TEXT NOT NULL DEFAULT 'waiting', created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            lobby_id TEXT PRIMARY KEY, 
+            host_id BIGINT NOT NULL, 
+            chat_id BIGINT NOT NULL,
+            game_type TEXT NOT NULL, 
+            bet_amount NUMERIC(18,2) NOT NULL,
+            status TEXT NOT NULL DEFAULT 'waiting', 
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
+        
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobby_players (
             lobby_id TEXT REFERENCES lobbies(lobby_id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL, PRIMARY KEY(lobby_id, user_id)
+            user_id BIGINT NOT NULL, 
+            PRIMARY KEY(lobby_id, user_id)
         )""")
 
 def ensure_user(uid):
@@ -301,10 +329,14 @@ async def profile(c: CallbackQuery):
         u = get_user(c.from_user.id)
         lang = u["lang"]
         count, _ = await get_referral_data(c.from_user.id)
+        
+        is_vip = u.get("is_vip", False)
+        is_anon = u.get("is_anonymous", False)
+        
         text = TEXT[lang]["profile_text"].format(
             u["user_id"], u["wins"], u["losses"], u["games"],
-            "✅" if u["is_vip"] else "❌",
-            "✅" if u["is_anonymous"] else "❌",
+            "✅" if is_vip else "❌",
+            "✅" if is_anon else "❌",
             count
         )
         await c.message.edit_text(text, reply_markup=profile_kb(lang), parse_mode="HTML")
