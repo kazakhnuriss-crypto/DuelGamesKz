@@ -1,4 +1,4 @@
-import asyncio, os, uuid, re, json
+import asyncio, os, uuid, re, json, random
 from decimal import Decimal
 from contextlib import contextmanager
 import httpx, psycopg2, psycopg2.extras
@@ -23,11 +23,7 @@ PORT = int(os.getenv("PORT", "8080"))
 LAVEPAY_BASE = "https://laveshka.io/merchant/v1"
 
 if DATABASE_URL.startswith("postgres://"): DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-
-bot = Bot(BOT_TOKEN)
-dp = Dispatcher()
-lp = LavePay(LAVEPAY_API_KEY, webhook_secret=LAVEPAY_WEBHOOK_SECRET)
-app = FastAPI(title="Duel Games")
+bot = Bot(BOT_TOKEN); dp = Dispatcher(); lp = LavePay(LAVEPAY_API_KEY, webhook_secret=LAVEPAY_WEBHOOK_SECRET); app = FastAPI(title="Duel Games")
 
 _pool = None
 def get_pool():
@@ -37,15 +33,14 @@ def get_pool():
 
 @contextmanager
 def db():
-    p = get_pool()
-    conn = p.getconn()
+    p = get_pool(); conn = p.getconn()
     try:
         with conn: yield conn
     finally: p.putconn(conn)
 
 def init_db():
     with db() as conn, conn.cursor() as cur:
-        cur.execute("CREATE TABLE IF NOT EXISTS users (user_id BIGINT PRIMARY KEY, balance NUMERIC(18,2) DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, games INTEGER DEFAULT 0, lang TEXT DEFAULT 'kz', is_vip BOOLEAN DEFAULT FALSE, is_anonymous BOOLEAN DEFAULT FALSE, referrer_id BIGINT, has_deposited BOOLEAN DEFAULT FALSE)")
+        cur.execute("CREATE TABLE IF NOT EXISTS users (user_id BIGINT PRIMARY KEY, balance NUMERIC(18,2) DEFAULT 0, wins INTEGER DEFAULT 0, losses INTEGER DEFAULT 0, games INTEGER DEFAULT 0, lang TEXT DEFAULT 'ru', is_vip BOOLEAN DEFAULT FALSE, is_anonymous BOOLEAN DEFAULT FALSE, referrer_id BIGINT, has_deposited BOOLEAN DEFAULT FALSE)")
         cur.execute("CREATE TABLE IF NOT EXISTS payments (order_id TEXT PRIMARY KEY, user_id BIGINT, amount NUMERIC(18,2), status TEXT DEFAULT 'pending', paid_at TIMESTAMP)")
         cur.execute("CREATE TABLE IF NOT EXISTS withdrawals (id BIGSERIAL PRIMARY KEY, user_id BIGINT, amount NUMERIC(18,2), address TEXT, network TEXT, status TEXT DEFAULT 'pending', tx_id TEXT)")
         cur.execute("CREATE TABLE IF NOT EXISTS lobbies (lobby_id TEXT PRIMARY KEY, host_id BIGINT, chat_id BIGINT, game_type TEXT, bet_amount NUMERIC(18,2), status TEXT DEFAULT 'waiting')")
@@ -58,12 +53,29 @@ def get_user(uid):
         cur.execute("INSERT INTO users(user_id) VALUES(%s) ON CONFLICT DO NOTHING", (uid,))
         cur.execute("SELECT * FROM users WHERE user_id=%s", (uid,))
         return cur.fetchone()
-def get_lang(uid): return get_user(uid)["lang"] if get_user(uid) else "kz"
+
+def get_lang(uid): return get_user(uid)["lang"] if get_user(uid) else "ru"
 def money(v): return Decimal(str(v)).quantize(Decimal("0.01"))
 def is_admin(uid): return ADMIN_ID != 0 and uid == ADMIN_ID
 
-EMOJI_IDS = {"wallet": "5420271804411292547", "balance": "5992085874546844207", "crypto": "5940552778165264297", "play": "5766994197705921104", "dice": "5402282535755461614", "darts": "5400331881868698012", "profile": "6032693626394382504", "vip": "5251422397893989847", "win": "5449683594425410231", "lose": "5447183459602669338", "back": "5240241223632954241", "info": "5274099962655816924", "usdt": "5409048419211682843", "gift": "5197371802132800918", "join": "5449683594425410231", "search": "5420271804411292547", "admin": "5274099962655816924", "bot": "5291913773307667021", "lobby": "5282843764451195532", "games": "5282843764451195532", "id": "5291913773307667021"}
-EMOJI_FALLBACK = {"wallet": "💰", "balance": "💵", "crypto": "💳", "play": "🎮", "dice": "🎲", "darts": "🎯", "profile": "👤", "vip": "👑", "win": "🏆", "lose": "❌", "back": "⬅️", "info": "ℹ️", "usdt": "💵", "gift": "🎁", "join": "✅", "search": "🔍", "admin": "🛡️", "bot": "🤖", "lobby": "🎮", "games": "🎮", "id": "🆔"}
+EMOJI_IDS = {
+    "wallet": "5420271804411292547", "balance": "5992085874546844207", "crypto": "5940552778165264297", 
+    "play": "5766994197705921104", "dice": "5402282535755461614", "darts": "5400331881868698012", 
+    "profile": "6032693626394382504", "vip": "5251422397893989847", "win": "5449683594425410231", 
+    "lose": "5447183459602669338", "back": "5240241223632954241", "info": "5274099962655816924", 
+    "usdt": "5409048419211682843", "gift": "5197371802132800918", "join": "5449683594425410231", 
+    "search": "5420271804411292547", "admin": "5274099962655816924", "bot": "5291913773307667021", 
+    "lobby": "5282843764451195532", "games": "5282843764451195532", "id": "5291913773307667021", 
+    "lang": "5253742260054409879", "coin": "5780673453795316112", "more": "5449683594425410231", 
+    "less": "5447183459602669338", "even": "5451882707875276247"
+}
+EMOJI_FALLBACK = {
+    "wallet": "💰", "balance": "💵", "crypto": "💳", "play": "🎮", "dice": "🎲", "darts": "🎯", 
+    "profile": "👤", "vip": "👑", "win": "🏆", "lose": "❌", "back": "⬅️", "info": "ℹ️", 
+    "usdt": "💵", "gift": "🎁", "join": "✅", "search": "🔍", "admin": "🛡️", "bot": "🤖", 
+    "lobby": "🎮", "games": "🎮", "id": "🆔", "lang": "🌐", "coin": "🪙", "more": "⬆️", 
+    "less": "⬇️", "even": "🔢"
+}
 def e(key): return f'<tg-emoji emoji-id="{EMOJI_IDS.get(key, "5274099962655816924")}">{EMOJI_FALLBACK.get(key, "⭐")}</tg-emoji>'
 
 class S(StatesGroup):
@@ -71,9 +83,39 @@ class S(StatesGroup):
     chk_amt = State(); chk_cnt = State(); chk_get = State(); adm_give = State(); duel = State()
 
 TEXT = {
-"kz": {"w": "Сәлем! <b>Duel Games</b>!\n\n" + e("wallet") + " Балансыңыз: <b>${:.2f}</b>", "play": "Ойын", "prof": "Профиль", "bal": "Баланс", "dep": "Толықтыру", "wd": "Шығару", "lang": "Тіл", "adm": "Админ", "chk": "Мультичек", "dice": "Кости", "darts": "Дартс", "bet": "Ставка (USD):", "nom": "Баланс жеткіліксіз!", "dep_a": "Толықтыру сомасы (USD):", "pay": "Төлеу", "pay_c": "Төлем шоты: ${}", "wd_a": "Шығару сомасы (USD, min $1):", "wd_ad": "USDT адрес:\nTRC20: T...\nBEP20: 0x...\nTON: UQ...\n\n⚠️ Адрес қате болса, ақша қайтарылмайды!", "wd_s": "Өңделуде...", "pr_t": e("profile") + " <b>Профиль</b>\n" + e("id") + " ID: <code>{}</code>\n" + e("win") + " Жеңістер: {}\n" + e("lose") + " Жеңілістер: {}\n" + e("games") + " Ойындар: {}", "back": "Артқа", "bad": "Қате сома.", "l_c": "Лобби ашу", "l_s": "Іздеу", "l_j": "Кіру", "m_b": " Ботпен", "m_p": "Ойыншылармен", "b_w": "Бот лақтырып жатыр...", "b_t": "Сіз лақтырыңыз:", "b_d": "Тең! Қайтарылды.", "b_win": "Жеңдіңіз! ${}", "b_lose": "Жеңілдіңіз.", "chk_m": "Мультичек", "chk_c": "Жасау", "chk_g": "Алу", "chk_a": "Сома (USD):", "chk_cn": "Адам саны:", "adm_g": "ID мен сома (мыс: 123 5.5):"},
-"ru": {"w": "Привет! <b>Duel Games</b>!\n\n" + e("wallet") + " Баланс: <b>${:.2f}</b>", "play": "Играть", "prof": "Профиль", "bal": "Баланс", "dep": "Пополнить", "wd": "Вывод", "lang": "Язык", "adm": "Админ", "chk": "Мультичек", "dice": "Кости", "darts": "Дартс", "bet": "Ставка (USD):", "nom": "Недостаточно средств!", "dep_a": "Сумма пополнения (USD):", "pay": "Оплатить", "pay_c": "Счёт: ${}", "wd_a": "Сумма вывода (USD, min $1):", "wd_ad": "Адрес USDT:\nTRC20: T...\nBEP20: 0x...\nTON: UQ...\n\n⚠️ Если адрес неверный — деньги не возвращаются!", "wd_s": "Обрабатывается...", "pr_t": e("profile") + " <b>Профиль</b>\n" + e("id") + " ID: <code>{}</code>\n" + e("win") + " Победы: {}\n" + e("lose") + " Поражения: {}\n" + e("games") + " Игры: {}", "back": "Назад", "bad": "Неверная сумма.", "l_c": "Создать лобби", "l_s": "Поиск", "l_j": "Войти", "m_b": " С ботом", "m_p": "С игроками", "b_w": "Бот бросает...", "b_t": "Ваш ход:", "b_d": "Ничья! Возврат.", "b_win": "Победа! ${}", "b_lose": "Проигрыш.", "chk_m": "Мультичек", "chk_c": "Создать", "chk_g": "Активировать", "chk_a": "Сумма (USD):", "chk_cn": "Кол-во людей:", "adm_g": "ID и сумма (напр: 123 5.5):"},
-"en": {"w": "Hi! <b>Duel Games</b>!\n\n" + e("wallet") + " Balance: <b>${:.2f}</b>", "play": "Play", "prof": "Profile", "bal": "Balance", "dep": "Deposit", "wd": "Withdraw", "lang": "Language", "adm": "Admin", "chk": "Multi-check", "dice": "Dice", "darts": "Darts", "bet": "Bet (USD):", "nom": "Insufficient balance!", "dep_a": "Deposit amount (USD):", "pay": "Pay", "pay_c": "Invoice: ${}", "wd_a": "Withdraw amount (USD, min $1):", "wd_ad": "USDT address:\nTRC20: T...\nBEP20: 0x...\nTON: UQ...\n\n⚠️ Wrong address = no refund!", "wd_s": "Processing...", "pr_t": e("profile") + " <b>Profile</b>\n" + e("id") + " ID: <code>{}</code>\n" + e("win") + " Wins: {}\n" + e("lose") + " Losses: {}\n" + e("games") + " Games: {}", "back": "Back", "bad": "Invalid amount.", "l_c": "Create lobby", "l_s": "Search", "l_j": "Join", "m_b": " With bot", "m_p": "With players", "b_w": "Bot rolling...", "b_t": "Your turn:", "b_d": "Draw! Refunded.", "b_win": "You won! ${}", "b_lose": "You lost.", "chk_m": "Multi-check", "chk_c": "Create", "chk_g": "Claim", "chk_a": "Amount (USD):", "chk_cn": "Number of people:", "adm_g": "ID and amount (e.g. 123 5.5):"}
+"kz": {
+    "w": "Сәлем! <b>Duel Games</b>!\n\n" + e("wallet") + " Балансыңыз: <b>${:.2f}</b>", "play": "Ойын", "prof": "Профиль", "bal": "Баланс", "dep": "Толықтыру", "wd": "Шығару", "lang": "Тіл", "adm": "Админ", "chk": "Мультичек", 
+    "dice": "Кости", "darts": "Дартс", "coin": "Орёл/Решка", "more": "Больше/Меньше", "even": "Чет/Нечет",
+    "bet": "Ставка (USD):", "nom": "Баланс жеткіліксіз!", "dep_a": "Толықтыру сомасы (USD):", "pay": "Төлеу", "pay_c": "Төлем шоты: ${}", 
+    "wd_a": "Шығару сомасы (USD, min $1):", "wd_ad": "USDT адрес:\nTRC20: T...\nBEP20: 0x...\nTON: UQ...\n\n⚠️ Адрес қате болса, ақша қайтарылмайды!", "wd_s": "Өңделуде...", 
+    "pr_t": e("profile") + " <b>Профиль</b>\n" + e("id") + " ID: <code>{}</code>\n" + e("win") + " Жеңістер: {}\n" + e("lose") + " Жеңілістер: {}\n" + e("games") + " Ойындар: {}", 
+    "back": "Артқа", "bad": "Қате сома.", "l_c": "Лобби ашу", "l_s": "Іздеу", "l_j": "Кіру", "m_b": "Ботпен", "m_p": "Ойыншылармен", 
+    "b_w": "Бот лақтырып жатыр...", "b_t": "Сіз лақтырыңыз:", "b_d": "Тең! Қайтарылды.", "b_win": "Жеңдіңіз! ${}", "b_lose": "Жеңілдіңіз.", 
+    "chk_m": "Мультичек", "chk_c": "Жасау", "chk_g": "Алу", "chk_a": "Сома (USD):", "chk_cn": "Адам саны:", "adm_g": "ID мен сома (мыс: 123 5.5):",
+    "choose_lang": "Тілді таңдаңыз:", "c_h": "Орёл", "c_t": "Решка", "m_h": "Больше", "m_l": "Меньше", "e_e": "Чет", "e_o": "Нечет", "c_w": "🎉 Жеңдіңіз! Ұтыс: ${}", "c_l": "❌ Жеңілдіңіз.", "your_turn": "Тандаңыз:"
+},
+"ru": {
+    "w": "Привет! <b>Duel Games</b>!\n\n" + e("wallet") + " Баланс: <b>${:.2f}</b>", "play": "Играть", "prof": "Профиль", "bal": "Баланс", "dep": "Пополнить", "wd": "Вывод", "lang": "Язык", "adm": "Админ", "chk": "Мультичек", 
+    "dice": "Кости", "darts": "Дартс", "coin": "Орел/Решка", "more": "Больше/Меньше", "even": "Чет/Нечет",
+    "bet": "Ставка (USD):", "nom": "Недостаточно средств!", "dep_a": "Сумма пополнения (USD):", "pay": "Оплатить", "pay_c": "Счёт: ${}", 
+    "wd_a": "Сумма вывода (USD, min $1):", "wd_ad": "Адрес USDT:\nTRC20: T...\nBEP20: 0x...\nTON: UQ...\n\n⚠️ Если адрес неверный — деньги не возвращаются!", "wd_s": "Обрабатывается...", 
+    "pr_t": e("profile") + " <b>Профиль</b>\n" + e("id") + " ID: <code>{}</code>\n" + e("win") + " Победы: {}\n" + e("lose") + " Поражения: {}\n" + e("games") + " Игры: {}", 
+    "back": "Назад", "bad": "Неверная сумма.", "l_c": "Создать лобби", "l_s": "Поиск", "l_j": "Войти", "m_b": "С ботом", "m_p": "С игроками", 
+    "b_w": "Бот бросает...", "b_t": "Ваш ход:", "b_d": "Ничья! Возврат.", "b_win": "Победа! ${}", "b_lose": "Проигрыш.", 
+    "chk_m": "Мультичек", "chk_c": "Создать", "chk_g": "Активировать", "chk_a": "Сумма (USD):", "chk_cn": "Кол-во людей:", "adm_g": "ID и сумма (напр: 123 5.5):",
+    "choose_lang": "Выберите язык:", "c_h": "Орел", "c_t": "Решка", "m_h": "Больше", "m_l": "Меньше", "e_e": "Чет", "e_o": "Нечет", "c_w": "🎉 Победа! Выигрыш: ${}", "c_l": "❌ Вы проиграли.", "your_turn": "Выберите:"
+},
+"en": {
+    "w": "Hi! <b>Duel Games</b>!\n\n" + e("wallet") + " Balance: <b>${:.2f}</b>", "play": "Play", "prof": "Profile", "bal": "Balance", "dep": "Deposit", "wd": "Withdraw", "lang": "Language", "adm": "Admin", "chk": "Multi-check", 
+    "dice": "Dice", "darts": "Darts", "coin": "Heads/Tails", "more": "Higher/Lower", "even": "Even/Odd",
+    "bet": "Bet (USD):", "nom": "Insufficient balance!", "dep_a": "Deposit amount (USD):", "pay": "Pay", "pay_c": "Invoice: ${}", 
+    "wd_a": "Withdraw amount (USD, min $1):", "wd_ad": "USDT address:\nTRC20: T...\nBEP20: 0x...\nTON: UQ...\n\n⚠️ Wrong address = no refund!", "wd_s": "Processing...", 
+    "pr_t": e("profile") + " <b>Profile</b>\n" + e("id") + " ID: <code>{}</code>\n" + e("win") + " Wins: {}\n" + e("lose") + " Losses: {}\n" + e("games") + " Games: {}", 
+    "back": "Back", "bad": "Invalid amount.", "l_c": "Create lobby", "l_s": "Search", "l_j": "Join", "m_b": "With bot", "m_p": "With players", 
+    "b_w": "Bot rolling...", "b_t": "Your turn:", "b_d": "Draw! Refunded.", "b_win": "You won! ${}", "b_lose": "You lost.", 
+    "chk_m": "Multi-check", "chk_c": "Create", "chk_g": "Claim", "chk_a": "Amount (USD):", "chk_cn": "Number of people:", "adm_g": "ID and amount (e.g. 123 5.5):",
+    "choose_lang": "Choose language:", "c_h": "Heads", "c_t": "Tails", "m_h": "Higher", "m_l": "Lower", "e_e": "Even", "e_o": "Odd", "c_w": "🎉 You won! Prize: ${}", "c_l": "❌ You lost.", "your_turn": "Choose:"
+}
 }
 
 def main_kb(uid, l):
@@ -81,14 +123,24 @@ def main_kb(uid, l):
     kb.row(InlineKeyboardButton(text=t['play'], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["play"]), InlineKeyboardButton(text=t['prof'], callback_data="profile", icon_custom_emoji_id=EMOJI_IDS["profile"]))
     kb.row(InlineKeyboardButton(text=t['bal'], callback_data="balance", icon_custom_emoji_id=EMOJI_IDS["balance"]), InlineKeyboardButton(text=t['dep'], callback_data="deposit", icon_custom_emoji_id=EMOJI_IDS["wallet"]), InlineKeyboardButton(text=t['wd'], callback_data="withdraw", icon_custom_emoji_id=EMOJI_IDS["crypto"]))
     kb.row(InlineKeyboardButton(text=t['chk'], callback_data="check_menu", icon_custom_emoji_id=EMOJI_IDS["gift"]))
-    if is_admin(uid): kb.row(InlineKeyboardButton(text=t['lang'], callback_data="lang", icon_custom_emoji_id=EMOJI_IDS["info"]), InlineKeyboardButton(text=t['adm'], callback_data="adm_h", icon_custom_emoji_id=EMOJI_IDS["admin"]))
-    else: kb.row(InlineKeyboardButton(text=t['lang'], callback_data="lang", icon_custom_emoji_id=EMOJI_IDS["info"]))
+    if is_admin(uid): kb.row(InlineKeyboardButton(text=t['lang'], callback_data="lang", icon_custom_emoji_id=EMOJI_IDS["lang"]), InlineKeyboardButton(text=t['adm'], callback_data="adm_h", icon_custom_emoji_id=EMOJI_IDS["admin"]))
+    else: kb.row(InlineKeyboardButton(text=t['lang'], callback_data="lang", icon_custom_emoji_id=EMOJI_IDS["lang"]))
     return kb.as_markup()
 
 def back_kb(l, d="home"): return InlineKeyboardBuilder().row(InlineKeyboardButton(text=TEXT[l]["back"], callback_data=d, icon_custom_emoji_id=EMOJI_IDS["back"])).as_markup()
 
 @dp.message(CommandStart())
 async def start(m: Message):
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("SELECT lang FROM users WHERE user_id=%s", (m.from_user.id,))
+        row = cur.fetchone()
+    
+    if not row: # Бірінші рет кіргенде
+        kb = InlineKeyboardBuilder()
+        kb.row(InlineKeyboardButton(text="Қазақша", callback_data="setl_kz"), InlineKeyboardButton(text="Русский", callback_data="setl_ru"), InlineKeyboardButton(text="English", callback_data="setl_en"))
+        await m.answer(f'<tg-emoji emoji-id="5253742260054409879">🌐</tg-emoji> Тілді таңдаңыз / Выберите язык / Choose language:', reply_markup=kb.as_markup(), parse_mode="HTML")
+        return
+
     u = get_user(m.from_user.id)
     if len(m.text.split()) > 1:
         a = m.text.split()[1]
@@ -100,7 +152,16 @@ async def start(m: Message):
             except: pass
         elif a.startswith("lobby_"): return await join_lobby(m, m.from_user.id, a[6:].upper())
         elif a.startswith("check_"): return await claim_chk(m, m.from_user.id, a[6:].upper())
+    
     await m.answer(TEXT[u["lang"]]["w"].format(float(u["balance"])), reply_markup=main_kb(m.from_user.id, u["lang"]), parse_mode="HTML")
+
+@dp.callback_query(F.data.startswith("setl_"))
+async def set_lang_init(c: CallbackQuery):
+    l = c.data.split("_")[1]
+    with db() as cn, cn.cursor() as cur:
+        cur.execute("INSERT INTO users(user_id, lang) VALUES(%s, %s) ON CONFLICT (user_id) DO UPDATE SET lang=%s", (c.from_user.id, l, l))
+    u = get_user(c.from_user.id)
+    await c.message.edit_text(TEXT[l]["w"].format(float(u["balance"])), reply_markup=main_kb(c.from_user.id, l), parse_mode="HTML"); await c.answer()
 
 @dp.callback_query(F.data == "home")
 async def home(c: CallbackQuery):
@@ -108,8 +169,7 @@ async def home(c: CallbackQuery):
 
 @dp.callback_query(F.data == "profile")
 async def prof(c: CallbackQuery):
-    u = get_user(c.from_user.id)
-    await c.message.edit_text(TEXT[u["lang"]]["pr_t"].format(u["user_id"], u["wins"], u["losses"], u["games"]), reply_markup=back_kb(u["lang"]), parse_mode="HTML"); await c.answer()
+    u = get_user(c.from_user.id); await c.message.edit_text(TEXT[u["lang"]]["pr_t"].format(u["user_id"], u["wins"], u["losses"], u["games"]), reply_markup=back_kb(u["lang"]), parse_mode="HTML"); await c.answer()
 
 @dp.callback_query(F.data == "balance")
 async def bal(c: CallbackQuery):
@@ -118,8 +178,8 @@ async def bal(c: CallbackQuery):
 @dp.callback_query(F.data == "lang")
 async def lang(c: CallbackQuery):
     kb = InlineKeyboardBuilder()
-    for code, name in [("kz", "Қазақша"), ("ru", "Русский"), ("en", "English")]: kb.button(text=name, callback_data=f"sl_{code}", icon_custom_emoji_id=EMOJI_IDS["info"])
-    kb.adjust(1); await c.message.edit_text("Тіл / Язык / Language:", reply_markup=kb.as_markup()); await c.answer()
+    for code, name in [("kz", "Қазақша"), ("ru", "Русский"), ("en", "English")]: kb.button(text=name, callback_data=f"sl_{code}", icon_custom_emoji_id=EMOJI_IDS["lang"])
+    kb.adjust(1); await c.message.edit_text(TEXT[get_lang(c.from_user.id)]["choose_lang"], reply_markup=kb.as_markup()); await c.answer()
 
 @dp.callback_query(F.data.startswith("sl_"))
 async def set_lang(c: CallbackQuery):
@@ -136,12 +196,21 @@ async def play(c: CallbackQuery):
 @dp.callback_query(F.data == "lc")
 async def lobby_create(c: CallbackQuery, state: FSMContext):
     l = get_lang(c.from_user.id); kb = InlineKeyboardBuilder()
-    kb.button(text=TEXT[l]["dice"], callback_data="lcd", icon_custom_emoji_id=EMOJI_IDS["dice"]); kb.button(text=TEXT[l]["darts"], callback_data="lct", icon_custom_emoji_id=EMOJI_IDS["darts"]); kb.button(text=TEXT[l]["back"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["back"]); kb.adjust(1)
+    kb.button(text=TEXT[l]["dice"], callback_data="lcd", icon_custom_emoji_id=EMOJI_IDS["dice"])
+    kb.button(text=TEXT[l]["darts"], callback_data="lct", icon_custom_emoji_id=EMOJI_IDS["darts"])
+    kb.button(text=TEXT[l]["coin"], callback_data="lcc", icon_custom_emoji_id=EMOJI_IDS["coin"])
+    kb.button(text=TEXT[l]["more"], callback_data="lcm", icon_custom_emoji_id=EMOJI_IDS["more"])
+    kb.button(text=TEXT[l]["even"], callback_data="lce", icon_custom_emoji_id=EMOJI_IDS["even"])
+    kb.button(text=TEXT[l]["back"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["back"]); kb.adjust(1)
     await c.message.edit_text("🎲/🎯", reply_markup=kb.as_markup()); await c.answer()
 
-@dp.callback_query(F.data.in_({"lcd", "lct"}))
+@dp.callback_query(F.data.in_({"lcd", "lct", "lcc", "lcm", "lce"}))
 async def lc_game(c: CallbackQuery, state: FSMContext):
-    await state.update_data(g=c.data[2:]); await state.set_state(S.l_bet); await c.message.edit_text(TEXT[get_lang(c.from_user.id)]["bet"], parse_mode="HTML"); await c.answer()
+    g = {"lcd": "dice", "lct": "darts", "lcc": "coin", "lcm": "more", "lce": "even"}.get(c.data, "dice")
+    await state.update_data(g=g) 
+    await state.set_state(S.l_bet)
+    await c.message.edit_text(TEXT[get_lang(c.from_user.id)]["bet"], parse_mode="HTML")
+    await c.answer()
 
 @dp.message(S.l_bet)
 async def lc_bet(m: Message, state: FSMContext):
@@ -161,11 +230,19 @@ async def mode_bot(c: CallbackQuery, state: FSMContext):
     with db() as cn, cn.cursor() as cur:
         cur.execute("UPDATE users SET balance=balance-%s WHERE user_id=%s AND balance >= %s", (b, c.from_user.id, b))
         if cur.rowcount != 1: return await c.answer("Err", show_alert=True)
-    await state.set_state(S.duel); await state.update_data(b=str(b), g=g)
-    await c.message.edit_text(TEXT[u["lang"]]["b_w"])
-    ds = "🎲" if g == "dice" else "🎯"
-    await asyncio.sleep(1); bd = await bot.send_dice(c.message.chat.id, emoji=ds); await asyncio.sleep(4)
-    await state.update_data(bv=bd.dice.value); await c.message.answer(TEXT[u["lang"]]["b_t"]); await c.answer()
+    await state.update_data(b=str(b), g=g)
+    
+    if g in ("dice", "darts"):
+        await state.set_state(S.duel); await c.message.edit_text(TEXT[u["lang"]]["b_w"])
+        ds = "🎲" if g == "dice" else "🎯"
+        await asyncio.sleep(1); bd = await bot.send_dice(c.message.chat.id, emoji=ds); await asyncio.sleep(4)
+        await state.update_data(bv=bd.dice.value); await c.message.answer(TEXT[u["lang"]]["b_t"]); await c.answer()
+    else:
+        kb = InlineKeyboardBuilder()
+        if g == "coin": kb.button(text=TEXT[u["lang"]]["c_h"], callback_data="play_c_h", icon_custom_emoji_id=EMOJI_IDS["coin"]).button(text=TEXT[u["lang"]]["c_t"], callback_data="play_c_t", icon_custom_emoji_id=EMOJI_IDS["coin"])
+        elif g == "more": kb.button(text=TEXT[u["lang"]]["m_h"], callback_data="play_m_h", icon_custom_emoji_id=EMOJI_IDS["more"]).button(text=TEXT[u["lang"]]["m_l"], callback_data="play_m_l", icon_custom_emoji_id=EMOJI_IDS["less"])
+        elif g == "even": kb.button(text=TEXT[u["lang"]]["e_e"], callback_data="play_e_e", icon_custom_emoji_id=EMOJI_IDS["even"]).button(text=TEXT[u["lang"]]["e_o"], callback_data="play_e_o", icon_custom_emoji_id=EMOJI_IDS["even"])
+        kb.adjust(2); await c.message.edit_text(TEXT[u["lang"]]["your_turn"], reply_markup=kb.as_markup()); await c.answer()
 
 @dp.message(S.duel, F.dice)
 async def duel_roll(m: Message, state: FSMContext):
@@ -179,6 +256,29 @@ async def duel_roll(m: Message, state: FSMContext):
             p = (b * 2 * Decimal("0.95")).quantize(Decimal("0.01")); cur.execute("UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s", (p, m.from_user.id)); res = TEXT[l]["b_win"].format(p)
         else: cur.execute("UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s", (m.from_user.id,)); res = TEXT[l]["b_lose"]
     await m.answer(res); await state.clear()
+
+@dp.callback_query(F.data.startswith("play_"))
+async def new_games_play(c: CallbackQuery, state: FSMContext):
+    d = await state.get_data(); b = Decimal(d.get("b", "0")); g = d.get("g"); l = get_lang(c.from_user.id); uid = c.from_user.id; choice = c.data.split("_")[1:]
+    win = False; res_text = ""
+    if g == "coin":
+        res = random.choice(["h", "t"]); win = (choice[1] == res); res_text = TEXT[l]["c_h"] if res == "h" else TEXT[l]["c_t"]
+    elif g == "more":
+        num = random.randint(1, 10)
+        if choice[1] == "h": win = num > 5
+        else: win = num < 5
+        res_text = f"Түскен сан: {num}"
+    elif g == "even":
+        num = random.randint(1, 10)
+        if choice[1] == "e": win = num % 2 == 0
+        else: win = num % 2 != 0
+        res_text = f"Түскен сан: {num}"
+    with db() as cn, cn.cursor() as cur:
+        if win:
+            p = (b * 2 * Decimal("0.95")).quantize(Decimal("0.01")); cur.execute("UPDATE users SET balance=balance+%s,wins=wins+1,games=games+1 WHERE user_id=%s", (p, uid)); await c.message.edit_text(f"{res_text}\n\n" + TEXT[l]["c_w"].format(p))
+        else:
+            cur.execute("UPDATE users SET losses=losses+1,games=games+1 WHERE user_id=%s", (uid,)); await c.message.edit_text(f"{res_text}\n\n" + TEXT[l]["c_l"])
+    await state.clear(); await c.answer()
 
 @dp.callback_query(F.data == "mp")
 async def mode_pl(c: CallbackQuery, state: FSMContext):
@@ -197,7 +297,7 @@ async def l_search(c: CallbackQuery):
         cur.execute("SELECT lobby_id,game_type,bet_amount FROM lobbies WHERE status='waiting' AND host_id != %s LIMIT 20", (c.from_user.id,)); rows = cur.fetchall()
     if not rows: return await c.message.edit_text("Бос.", reply_markup=back_kb(l, "play"))
     kb = InlineKeyboardBuilder()
-    for lid, gt, b in rows: kb.button(text=f"{'🎲' if gt=='dice' else '🎯'} ${b} — {lid}", callback_data=f"lj_{lid}")
+    for lid, gt, b in rows: kb.button(text=f"{gt} ${b} — {lid}", callback_data=f"lj_{lid}")
     kb.row(InlineKeyboardButton(text=TEXT[l]["back"], callback_data="play", icon_custom_emoji_id=EMOJI_IDS["back"])); kb.adjust(1)
     await c.message.edit_text("Лоббилер:", reply_markup=kb.as_markup()); await c.answer()
 
@@ -283,10 +383,14 @@ async def wd_ad(m: Message, state: FSMContext):
     l = get_lang(m.from_user.id); ad = m.text.strip(); net = detect_net(ad)
     if not net or net not in ("TRX", "BSC", "GRAM"): return await m.answer("❌ Формат қате (TRC20/BEP20/TON)")
     d = await state.get_data(); a = Decimal(d["a"]); uid = m.from_user.id
+    
+    # ⚠️ TON үшін де USDT жіберу
+    asset_to_send = "USDT" 
+    
     async with httpx.AsyncClient() as cl:
         r = await cl.get(f"{LAVEPAY_BASE}/withdrawals/networks", headers={"X-Api-Key": LAVEPAY_API_KEY})
-        info = next((i for i in r.json().get("data", {}).get("networks", []) if i["asset"] == "USDT" and i["network"] == net), None)
-    if not info: return await m.answer("⚠️ Желі қолжетімсіз.")
+        info = next((i for i in r.json().get("data", {}).get("networks", []) if i["asset"] == asset_to_send and i["network"] == net), None)
+    if not info: return await m.answer(f"⚠️ {net} желісі қазір қолжетімсіз.")
     fee = Decimal(info.get("fee", "0")); total = a + fee
     if a < Decimal(info.get("min_amount", "0")): return await m.answer(f"❌ Min: {info['min_amount']}")
     with db() as cn, cn.cursor() as cur:
@@ -295,12 +399,14 @@ async def wd_ad(m: Message, state: FSMContext):
         cur.execute("INSERT INTO withdrawals(user_id,amount,address,network) VALUES(%s,%s,%s,%s) RETURNING id", (uid, a, ad, net)); wid = cur.fetchone()[0]
     await m.answer(TEXT[l]["wd_s"])
     async with httpx.AsyncClient(timeout=30) as cl:
-        res = await cl.post(f"{LAVEPAY_BASE}/withdrawals", headers={"X-Api-Key": LAVEPAY_API_KEY, "Content-Type": "application/json"}, json={"asset": "USDT", "network": net, "address": ad, "amount": str(a), "idempotency_key": f"wd-{wid}-{uid}"})
+        res = await cl.post(f"{LAVEPAY_BASE}/withdrawals", headers={"X-Api-Key": LAVEPAY_API_KEY, "Content-Type": "application/json"}, json={"asset": asset_to_send, "network": net, "address": ad, "amount": str(a), "idempotency_key": f"wd-{wid}-{uid}"})
     r = res.json()
     with db() as cn, cn.cursor() as cur:
         if r.get("ok") and r["data"].get("status") != "failed":
             cur.execute("UPDATE withdrawals SET status=%s,tx_id=%s WHERE id=%s", (r["data"].get("status"), r["data"].get("tx_hash"), wid)); await m.answer(f"✅ Жіберілді! Tx: {r['data'].get('tx_hash') or '...'}")
-        else: cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (total, uid)); cur.execute("UPDATE withdrawals SET status='failed' WHERE id=%s", (wid,)); await m.answer("❌ Қате, баланс қайтарылды.")
+        else: 
+            cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (total, uid)); cur.execute("UPDATE withdrawals SET status='failed' WHERE id=%s", (wid,))
+            err_msg = r.get("error", {}).get("message", "Қате"); await m.answer(f"❌ {err_msg}, баланс қайтарылды.")
     await state.clear()
 
 @dp.callback_query(F.data == "check_menu")
