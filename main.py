@@ -43,6 +43,7 @@ EMOJI_IDS = {
     "id": "5291913773307667021", "games": "5282843764451195532",
     "anonymous": "5251422397893989847", "lobby": "5282843764451195532",
     "search": "5420271804411292547", "join": "5449683594425410231",
+    "gift": "5197371802132800918", 
 }
 
 EMOJI_FALLBACK = {
@@ -51,6 +52,7 @@ EMOJI_FALLBACK = {
     "win": "🏆", "lose": "❌", "back": "⬅️", "info": "ℹ️",
     "admin": "🛡️", "usdt": "💵", "id": "🆔", "games": "🎮",
     "anonymous": "👤", "lobby": "🎮", "search": "🔍", "join": "✅",
+    "gift": "🎁",
 }
 
 def e(key):
@@ -75,6 +77,8 @@ def init_db():
         cur.execute("DROP TABLE IF EXISTS users CASCADE;")
         cur.execute("DROP TABLE IF EXISTS payments CASCADE;")
         cur.execute("DROP TABLE IF EXISTS withdrawals CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS multi_checks CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS check_claims CASCADE;")
 
         # Жаңа дұрыс кестелерді құру
         cur.execute("""
@@ -93,40 +97,50 @@ def init_db():
         
         cur.execute("""
         CREATE TABLE IF NOT EXISTS payments (
-            order_id TEXT PRIMARY KEY, 
-            user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL, 
-            status TEXT NOT NULL DEFAULT 'pending',
-            created_at TIMESTAMP NOT NULL DEFAULT NOW(), 
-            paid_at TIMESTAMP
+            order_id TEXT PRIMARY KEY, user_id BIGINT NOT NULL,
+            amount NUMERIC(18,2) NOT NULL, status TEXT NOT NULL DEFAULT 'pending',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW(), paid_at TIMESTAMP
         )""")
         
         cur.execute("""
         CREATE TABLE IF NOT EXISTS withdrawals (
-            id BIGSERIAL PRIMARY KEY, 
-            user_id BIGINT NOT NULL,
-            amount NUMERIC(18,2) NOT NULL, 
-            address TEXT NOT NULL,
-            status TEXT NOT NULL DEFAULT 'pending', 
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            id BIGSERIAL PRIMARY KEY, user_id BIGINT NOT NULL,
+            amount NUMERIC(18,2) NOT NULL, address TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending', created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
         
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobbies (
-            lobby_id TEXT PRIMARY KEY, 
-            host_id BIGINT NOT NULL, 
-            chat_id BIGINT NOT NULL,
-            game_type TEXT NOT NULL, 
-            bet_amount NUMERIC(18,2) NOT NULL,
-            status TEXT NOT NULL DEFAULT 'waiting', 
-            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            lobby_id TEXT PRIMARY KEY, host_id BIGINT NOT NULL, chat_id BIGINT NOT NULL,
+            game_type TEXT NOT NULL, bet_amount NUMERIC(18,2) NOT NULL,
+            status TEXT NOT NULL DEFAULT 'waiting', created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )""")
         
         cur.execute("""
         CREATE TABLE IF NOT EXISTS lobby_players (
             lobby_id TEXT REFERENCES lobbies(lobby_id) ON DELETE CASCADE,
-            user_id BIGINT NOT NULL, 
-            PRIMARY KEY(lobby_id, user_id)
+            user_id BIGINT NOT NULL, PRIMARY KEY(lobby_id, user_id)
+        )""")
+
+        # 🆕 Кесте для мультичеков
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS multi_checks (
+            check_id TEXT PRIMARY KEY,
+            amount NUMERIC(18,2) NOT NULL,
+            max_claims INTEGER NOT NULL,
+            claimed INTEGER NOT NULL DEFAULT 0,
+            creator_id BIGINT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',
+            created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )""")
+
+        # 🆕 Кесте для тех, кто забрал
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS check_claims (
+            check_id TEXT REFERENCES multi_checks(check_id) ON DELETE CASCADE,
+            user_id BIGINT NOT NULL,
+            claimed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+            PRIMARY KEY(check_id, user_id)
         )""")
 
 def ensure_user(uid):
@@ -171,6 +185,8 @@ class AmountState(StatesGroup):
     withdraw = State()
     address = State()
     lobby_bet = State()
+    check_create = State()
+    admin_give = State()
 
 TEXT = {
     "kz": {
@@ -178,7 +194,8 @@ TEXT = {
         "play": "Ойын ойнау", "profile": "Профиль", "balance": "Баланс",
         "rating": "Рейтинг", "referrals": "Реферал", "deposit": "Пополнить",
         "withdraw": "Вывод", "lang": "Тіл", "admin_btn": "Админ панель",
-        "choose": e("play") + " Ойынды таңдаңыз:", "dice": "Кости дуэль", "darts": "Дартс дуэль",
+        "check_btn": "Мультичек", "choose": e("play") + " Ойынды таңдаңыз:", 
+        "dice": "Кости дуэль", "darts": "Дартс дуэль",
         "bet": "Ставканы енгізіңіз (USD):", "no_money": "Балансыңыз жеткіліксіз!",
         "deposit_amount": e("wallet") + " Толықтырғыңыз келетін соманы USD түрінде енгізіңіз:",
         "pay": "Төлеу", "created": e("crypto") + " Төлем шоты жасалды: ${}\nТөлеу үшін батырманы басыңыз.",
@@ -199,13 +216,26 @@ TEXT = {
         "lobby_search_title": e("search") + " <b>Онлайн лоббилер</b>\n\nЛобби таңдаңыз:",
         "lobby_joined": "Лоббиге кірдіңіз! Ойын басталады...",
         "lobby_not_found": "Лобби табылмады немесе толы.", "lobby_join_btn": "Лоббиге кіру",
+        "check_menu": e("gift") + " <b>Мультичек</b>\n\nМультичек дегеніміз — белгілі бір соманы көп адамға бөлу. Сілтемені басқан адам ақшаны ала алады.",
+        "check_create_btn": "Мультичек жасау", "check_get_btn": "Мультичекті алу",
+        "check_amount": "Жалпы соманы енгізіңіз (USD):", 
+        "check_count": "Қанша адам ала алады? (санын енгізіңіз):",
+        "check_created": "✅ Мультичек жасалды!\nЖалпы сома: ${}\nАдам саны: {}\nБір адамға: ${}\n\nСілтеме: {}",
+        "check_get_prompt": "🎁 Мультичек сілтемесін немесе кодын жіберіңіз:",
+        "check_not_found": "Мультичек табылмады немесе аяқталды.",
+        "check_already": "Сіз бұл мультичектен ақша алып қойғансыз!",
+        "check_empty": "Бұл мультичек бітті, ақша қалмады.",
+        "check_success": "🎉 Сіз мультичектен ${} алдыңыз! Балансыңыз: ${:.2f}",
+        "admin_give_prompt": "Қай ID-ге ақша бересіз? (ID мен соманы бірге жазыңыз, мысалы: 12345678 5.5):",
+        "admin_give_success": "✅ Баланс толықтырылды!"
     },
     "ru": {
         "welcome": "Привет! <b>Duel Games</b>!\n\n" + e("wallet") + " Баланс: <b>${:.2f}</b>\n\nЧто делаем?",
         "play": "Играть", "profile": "Профиль", "balance": "Баланс",
         "rating": "Рейтинг", "referrals": "Рефералы", "deposit": "Пополнить",
         "withdraw": "Вывод", "lang": "Язык", "admin_btn": "Админ панель",
-        "choose": e("play") + " Выберите игру:", "dice": "Дуэль на костях", "darts": "Дуэль в дартс",
+        "check_btn": "Мультичек", "choose": e("play") + " Выберите игру:", 
+        "dice": "Дуэль на костях", "darts": "Дуэль в дартс",
         "bet": "Введите ставку (USD):", "no_money": "Недостаточно средств!",
         "deposit_amount": e("wallet") + " Введите сумму пополнения в USD:",
         "pay": "Оплатить", "created": e("crypto") + " Счёт создан на ${}. Нажмите кнопку оплаты.",
@@ -226,13 +256,26 @@ TEXT = {
         "lobby_search_title": e("search") + " <b>Онлайн лобби</b>\n\nВыберите лобби:",
         "lobby_joined": "Вы вошли в лобби! Игра начинается...",
         "lobby_not_found": "Лобби не найдено или заполнено.", "lobby_join_btn": "Войти в лобби",
+        "check_menu": e("gift") + " <b>Мультичек</b>\n\nМультичек — это разделение суммы на многих людей. Кто перейдет по ссылке, тот получит деньги.",
+        "check_create_btn": "Создать мультичек", "check_get_btn": "Активировать чек",
+        "check_amount": "Введите общую сумму (USD):", 
+        "check_count": "Сколько человек могут получить? (введите число):",
+        "check_created": "✅ Мультичек создан!\nОбщая сумма: ${}\nКол-во людей: {}\nНа человека: ${}\n\nСсылка: {}",
+        "check_get_prompt": "🎁 Отправьте ссылку или код мультичека:",
+        "check_not_found": "Чек не найден или уже недействителен.",
+        "check_already": "Вы уже получали деньги с этого чека!",
+        "check_empty": "Этот чек уже пуст.",
+        "check_success": "🎉 Вы получили ${} с мультичека! Ваш баланс: ${:.2f}",
+        "admin_give_prompt": "Кому дать баланс? (Напишите ID и сумму вместе, например: 12345678 5.5):",
+        "admin_give_success": "✅ Баланс пополнен!"
     },
     "en": {
         "welcome": "Hi! <b>Duel Games</b>!\n\n" + e("wallet") + " Balance: <b>${:.2f}</b>\n\nWhat do we do?",
         "play": "Play", "profile": "Profile", "balance": "Balance",
         "rating": "Rating", "referrals": "Referrals", "deposit": "Deposit",
         "withdraw": "Withdraw", "lang": "Language", "admin_btn": "Admin panel",
-        "choose": e("play") + " Choose a game:", "dice": "Dice duel", "darts": "Darts duel",
+        "check_btn": "Multi-check", "choose": e("play") + " Choose a game:", 
+        "dice": "Dice duel", "darts": "Darts duel",
         "bet": "Enter bet (USD):", "no_money": "Insufficient balance!",
         "deposit_amount": e("wallet") + " Enter deposit amount in USD:",
         "pay": "Pay", "created": e("crypto") + " Invoice created for ${}. Tap to pay.",
@@ -253,6 +296,18 @@ TEXT = {
         "lobby_search_title": e("search") + " <b>Online lobbies</b>\n\nChoose a lobby:",
         "lobby_joined": "You joined the lobby! Game starts...",
         "lobby_not_found": "Lobby not found or full.", "lobby_join_btn": "Join lobby",
+        "check_menu": e("gift") + " <b>Multi-check</b>\n\nMulti-check splits a sum among multiple people. Anyone with the link gets money.",
+        "check_create_btn": "Create multi-check", "check_get_btn": "Claim multi-check",
+        "check_amount": "Enter total amount (USD):", 
+        "check_count": "How many people can claim? (enter number):",
+        "check_created": "✅ Multi-check created!\nTotal: ${}\nUsers: {}\nPer user: ${}\n\nLink: {}",
+        "check_get_prompt": "🎁 Send the multi-check link or code:",
+        "check_not_found": "Check not found or expired.",
+        "check_already": "You already claimed from this check!",
+        "check_empty": "This check is empty.",
+        "check_success": "🎉 You claimed ${} from multi-check! Your balance: ${:.2f}",
+        "admin_give_prompt": "Who to give balance? (Send ID and amount together, e.g. 12345678 5.5):",
+        "admin_give_success": "✅ Balance added!"
     },
 }
 
@@ -264,14 +319,15 @@ def main_kb(uid, lang):
     kb.button(text=t["balance"], callback_data="balance", icon_custom_emoji_id=EMOJI_IDS["balance"])
     kb.button(text=t["referrals"], callback_data="referrals", icon_custom_emoji_id=EMOJI_IDS["info"])
     kb.button(text=t["rating"], callback_data="rating", icon_custom_emoji_id=EMOJI_IDS["games"])
+    kb.button(text=t["check_btn"], callback_data="check_menu", icon_custom_emoji_id=EMOJI_IDS["gift"])
     kb.button(text=t["deposit"], callback_data="deposit", icon_custom_emoji_id=EMOJI_IDS["wallet"])
     kb.button(text=t["withdraw"], callback_data="withdraw", icon_custom_emoji_id=EMOJI_IDS["wallet"])
     kb.button(text=t["lang"], callback_data="language", icon_custom_emoji_id=EMOJI_IDS["info"])
     if is_admin(uid):
         kb.button(text=t["admin_btn"], callback_data="admin_home", icon_custom_emoji_id=EMOJI_IDS["admin"])
-        kb.adjust(4, 4, 1)
+        kb.adjust(4, 4, 2)
     else:
-        kb.adjust(4, 4)
+        kb.adjust(4, 4, 1)
     return kb.as_markup()
 
 def back_kb(lang, data="home"):
@@ -305,6 +361,9 @@ async def start(message: Message):
                 pass
         elif args[1].startswith("lobby_"):
             await try_join_lobby(message, message.from_user.id, args[1][6:].upper())
+            return
+        elif args[1].startswith("check_"):
+            await claim_check(message, message.from_user.id, args[1][6:].upper())
             return
 
     await message.answer(
@@ -342,7 +401,6 @@ async def profile(c: CallbackQuery):
         await c.message.edit_text(text, reply_markup=profile_kb(lang), parse_mode="HTML")
     except Exception as ex:
         print("Profile Error:", ex)
-        await c.answer("Қате шықты, қайталап көріңіз.", show_alert=True)
     await c.answer()
 
 @dp.callback_query(F.data == "balance")
@@ -527,7 +585,6 @@ async def lobby_search(c: CallbackQuery):
         )
     except Exception as ex:
         print("Lobby Search Error:", ex)
-        await c.answer("Лобби іздеу кезінде қате шықты.", show_alert=True)
     await c.answer()
 
 async def try_join_lobby(target, uid, lobby_id):
@@ -723,6 +780,135 @@ async def withdraw_address(message: Message, state: FSMContext):
         )
     await state.clear()
 
+# ============= МУЛЬТИЧЕК ФУНКЦИЯЛАРЫ =============
+
+@dp.callback_query(F.data == "check_menu")
+async def check_menu(c: CallbackQuery):
+    lang = get_lang(c.from_user.id)
+    kb = InlineKeyboardBuilder()
+    
+    if is_admin(c.from_user.id):
+        kb.button(text=TEXT[lang]["check_create_btn"], callback_data="check_create", icon_custom_emoji_id=EMOJI_IDS["gift"])
+    
+    kb.button(text=TEXT[lang]["check_get_btn"], callback_data="check_get", icon_custom_emoji_id=EMOJI_IDS["join"])
+    kb.button(text=TEXT[lang]["back"], callback_data="home", icon_custom_emoji_id=EMOJI_IDS["back"])
+    kb.adjust(1)
+    
+    await c.message.edit_text(TEXT[lang]["check_menu"], reply_markup=kb.as_markup(), parse_mode="HTML")
+    await c.answer()
+
+@dp.callback_query(F.data == "check_create")
+async def check_create(c: CallbackQuery, state: FSMContext):
+    if not is_admin(c.from_user.id):
+        await c.answer("⛔", show_alert=True)
+        return
+    lang = get_lang(c.from_user.id)
+    await state.set_state(AmountState.check_create)
+    await c.message.edit_text(TEXT[lang]["check_amount"], parse_mode="HTML")
+    await c.answer()
+
+@dp.message(AmountState.check_create)
+async def check_create_amount(message: Message, state: FSMContext):
+    lang = get_lang(message.from_user.id)
+    try:
+        amount = money(message.text.replace(",", "."))
+        if amount <= 0: raise ValueError
+    except Exception:
+        await message.answer(TEXT[lang]["bad_amount"])
+        return
+        
+    await state.update_data(total_amount=str(amount))
+    await message.answer(TEXT[lang]["check_count"])
+    
+@dp.message(AmountState.check_create)
+async def check_create_count(message: Message, state: FSMContext):
+    lang = get_lang(message.from_user.id)
+    data = await state.get_data()
+    if "total_amount" not in data:
+        return
+        
+    try:
+        count = int(message.text)
+        if count <= 0: raise ValueError
+    except Exception:
+        await message.answer("Санды дұрыс енгізіңіз.")
+        return
+        
+    total_amount = Decimal(data["total_amount"])
+    per_user = (total_amount / count).quantize(Decimal("0.01"))
+    check_id = uuid.uuid4().hex[:8].upper()
+    
+    with db() as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO multi_checks(check_id, amount, max_claims, creator_id) VALUES(%s,%s,%s,%s)",
+            (check_id, total_amount, count, message.from_user.id)
+        )
+        
+    me = await bot.get_me()
+    link = f"https://t.me/{me.username}?start=check_{check_id}"
+    
+    await message.answer(
+        TEXT[lang]["check_created"].format(total_amount, count, per_user, link),
+        parse_mode="HTML", disable_web_page_preview=True
+    )
+    await state.clear()
+
+@dp.callback_query(F.data == "check_get")
+async def check_get_prompt(c: CallbackQuery, state: FSMContext):
+    lang = get_lang(c.from_user.id)
+    await state.set_state(AmountState.check_get)
+    await c.message.edit_text(TEXT[lang]["check_get_prompt"], parse_mode="HTML")
+    await c.answer()
+
+@dp.message(AmountState.check_get)
+async def check_get_code(message: Message, state: FSMContext):
+    text = message.text.strip()
+    if "start=check_" in text:
+        check_id = text.split("start=check_")[1].split()[0].upper()
+    else:
+        check_id = text.upper()
+        
+    await claim_check(message, message.from_user.id, check_id)
+    await state.clear()
+
+async def claim_check(target, uid, check_id):
+    lang = get_lang(uid)
+    with db() as conn, conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+        cur.execute("SELECT * FROM multi_checks WHERE check_id=%s FOR UPDATE", (check_id,))
+        check = cur.fetchone()
+        
+        if not check or check["status"] != "active":
+            await target.answer(TEXT[lang]["check_not_found"])
+            return
+            
+        if check["claimed"] >= check["max_claims"]:
+            await target.answer(TEXT[lang]["check_empty"])
+            return
+            
+        cur.execute("SELECT 1 FROM check_claims WHERE check_id=%s AND user_id=%s", (check_id, uid))
+        if cur.fetchone():
+            await target.answer(TEXT[lang]["check_already"])
+            return
+            
+        per_user = (Decimal(check["amount"]) / check["max_claims"]).quantize(Decimal("0.01"))
+        
+        cur.execute("INSERT INTO check_claims(check_id, user_id) VALUES(%s,%s)", (check_id, uid))
+        cur.execute("UPDATE multi_checks SET claimed = claimed + 1 WHERE check_id=%s", (check_id,))
+        
+        if check["claimed"] + 1 >= check["max_claims"]:
+            cur.execute("UPDATE multi_checks SET status='finished' WHERE check_id=%s", (check_id,))
+            
+        cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (per_user, uid))
+        cur.execute("SELECT balance FROM users WHERE user_id=%s", (uid,))
+        new_bal = cur.fetchone()[0]
+        
+    await target.answer(
+        TEXT[lang]["check_success"].format(per_user, new_bal),
+        parse_mode="HTML"
+    )
+
+# ============= АДМИН ПАНЕЛЬ =============
+
 @dp.message(Command("admin"))
 async def admin_cmd(message: Message):
     if not is_admin(message.from_user.id):
@@ -753,6 +939,7 @@ async def admin_show_home(message, edit=False):
     kb.button(text="💸 Шығарулар", callback_data="adm_withdrawals")
     kb.button(text="👥 Юзерлер", callback_data="adm_users")
     kb.button(text="🎮 Лоббилер", callback_data="adm_lobbies")
+    kb.button(text="💳 Баланс беру", callback_data="adm_give_balance")
     kb.button(text="⬅️ Басты мәзір", callback_data="home")
     kb.adjust(1)
 
@@ -768,6 +955,43 @@ async def admin_show_home(message, edit=False):
         await message.edit_text(text, reply_markup=kb.as_markup(), parse_mode="HTML")
     else:
         await message.answer(text, reply_markup=kb.as_markup(), parse_mode="HTML")
+
+@dp.callback_query(F.data == "adm_give_balance")
+async def adm_give_balance(c: CallbackQuery, state: FSMContext):
+    if not is_admin(c.from_user.id):
+        await c.answer("⛔", show_alert=True)
+        return
+    lang = get_lang(c.from_user.id)
+    await state.set_state(AmountState.admin_give)
+    await c.message.edit_text(TEXT[lang]["admin_give_prompt"], parse_mode="HTML")
+    await c.answer()
+
+@dp.message(AmountState.admin_give)
+async def admin_give_process(message: Message, state: FSMContext):
+    if not is_admin(message.from_user.id):
+        return
+    lang = get_lang(message.from_user.id)
+    
+    try:
+        parts = message.text.split()
+        if len(parts) != 2: raise ValueError
+        target_id = int(parts[0])
+        amount = money(parts[1].replace(",", "."))
+        if amount <= 0: raise ValueError
+    except Exception:
+        await message.answer("Қате формат. Мысалы: 12345678 5.5")
+        return
+        
+    get_user(target_id) # ensure user exists
+    with db() as conn, conn.cursor() as cur:
+        cur.execute("UPDATE users SET balance=balance+%s WHERE user_id=%s", (amount, target_id))
+        
+    await message.answer(TEXT[lang]["admin_give_success"])
+    try:
+        await bot.send_message(target_id, f"🎁 Сізге әкімшіден ${amount} баланс қосылды!")
+    except:
+        pass
+    await state.clear()
 
 @dp.callback_query(F.data == "adm_withdrawals")
 async def adm_withdrawals(c: CallbackQuery):
